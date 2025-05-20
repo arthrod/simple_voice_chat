@@ -56,6 +56,7 @@ setuptools.setup(
         "loguru>=0.7.3",
         "platformdirs>=4.3.7",
         "google-genai >= 1.14.0",
+        "security==1.3.1",
     ],
 
     # Define entry points, e.g., console scripts

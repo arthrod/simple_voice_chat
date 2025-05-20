@@ -13,6 +13,7 @@ import requests
 from loguru import logger
 from openai import OpenAI  # Assuming OpenAI client is used, adjust if different
 from pydub import AudioSegment
+from security import safe_requests
 
 
 def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
@@ -25,7 +26,7 @@ def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
 
     try:
         logger.info(f"Fetching available TTS voices: {voices_url}")
-        response = requests.get(
+        response = safe_requests.get(
             voices_url, headers=headers, timeout=10
         )  # Added timeout
         response.raise_for_status()
