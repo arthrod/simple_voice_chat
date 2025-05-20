@@ -89,6 +89,7 @@ from src.utils.env import (
     GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV,  # Add Gemini threshold env var
     GEMINI_MODEL_ENV,  # Add Gemini env var
     GEMINI_VOICE_ENV,  # Add Gemini env var
+    DEFAULT_SYSTEM_INSTRUCTION_ENV,
     LLM_API_KEY_ENV,
     LLM_HOST_ENV,
     LLM_PORT_ENV,
@@ -732,8 +733,8 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
         self.session: genai.live.AsyncLiveConnectSession | None = None
         self._input_audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self.output_queue: asyncio.Queue = asyncio.Queue()  # For (sample_rate, np.ndarray) or AdditionalOutputs
-        self.current_stt_language_code = self.settings.current_stt_language  # Store the language code
-        self.current_gemini_voice = self.settings.current_gemini_voice
+        self.current_stt_language_code = self.settings.current_stt_language # Updated from global settings in main
+        self.current_gemini_voice = self.settings.current_gemini_voice # Updated from global settings in main
 
         # State for cost calculation (Gemini Backend - Character based)
         self._current_input_chars: int = 0
@@ -836,33 +837,35 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
             api_key=self.settings.gemini_api_key,
         )
 
-        # Update language and voice if changed in settings
-        # Language Code Formatting
-        formatted_language_code = self.settings.current_stt_language  # Use a temporary var from settings
-        if formatted_language_code and len(formatted_language_code) == 2:
-            formatted_language_code = f"{formatted_language_code}-{formatted_language_code.upper()}"
-            logger.info(f"GeminiRealtimeHandler: Formatted 2-letter language code to: {formatted_language_code}")
+        # Use language and voice from global settings, which should be correctly populated by main()
+        # self.current_stt_language_code and self.current_gemini_voice are initialized from settings
+        logger.info(f"GeminiRealtimeHandler: Initializing with STT language: {self.current_stt_language_code or 'auto-detect by API'}, Voice: {self.current_gemini_voice}")
 
-        # Update internal state and log if changed
-        if self.current_stt_language_code != formatted_language_code:
-            self.current_stt_language_code = formatted_language_code
-            logger.info(f"GeminiRealtimeHandler: STT language code set to: {self.current_stt_language_code or 'auto-detect (Gemini default)'}")
-        elif not self.current_stt_language_code:  # Log even if it was already None/empty
-             logger.info("GeminiRealtimeHandler: STT language code is not set (auto-detect by Gemini).")
+        # Formatting for BCP-47 language tags (e.g., "en" -> "en-EN", but "pt-BR" stays "pt-BR")
+        processed_language_code_for_api = self.current_stt_language_code
+        if processed_language_code_for_api and len(processed_language_code_for_api) == 2 and "-" not in processed_language_code_for_api:
+            # This check ensures "pt-BR" is not reformatted to "pt-BR-PT-BR"
+            # It converts "en" to "en-EN", "es" to "es-ES".
+            # The API might need more specific dialects (e.g., "en-US"), which would require more sophisticated mapping or user input.
+            if processed_language_code_for_api.lower() != "pt-br": # Check to ensure "pt-br" is not reformatted.
+                 processed_language_code_for_api = f"{processed_language_code_for_api}-{processed_language_code_for_api.upper()}"
+                 logger.info(f"GeminiRealtimeHandler: Formatted 2-letter language code to: {processed_language_code_for_api} for API.")
+            else:
+                logger.info(f"GeminiRealtimeHandler: Using language code '{processed_language_code_for_api}' as is for API (e.g. pt-BR).")
 
-        if self.current_gemini_voice != self.settings.current_gemini_voice:
-            self.current_gemini_voice = self.settings.current_gemini_voice
-            logger.info(f"GeminiRealtimeHandler: Output voice updated to: {self.current_gemini_voice}")
 
         speech_config_params: dict[str, Any] = {
             "voice_config": GenaiVoiceConfig(
                 prebuilt_voice_config=PrebuiltVoiceConfig(
-                    voice_name=self.current_gemini_voice,
+                    voice_name=self.current_gemini_voice, # Use the voice set from global settings
                 ),
             ),
         }
-        if self.current_stt_language_code:  # Only add language_code if it's set
-            speech_config_params["language_code"] = self.current_stt_language_code
+        if processed_language_code_for_api:
+            speech_config_params["language_code"] = processed_language_code_for_api
+            logger.info(f"GeminiRealtimeHandler: Speech config language_code set to: {processed_language_code_for_api}")
+        else:
+            logger.info("GeminiRealtimeHandler: Speech config language_code not set (API will auto-detect or use default).")
 
         # Define function declarations for form interactions
         function_declarations = [
@@ -898,32 +901,34 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
 
         # Prepare arguments for LiveConnectConfig
         live_connect_config_args: dict[str, Any] = {
-            "response_modalities": ["AUDIO"],
-            "speech_config": GenaiSpeechConfig(**speech_config_params),
+            "response_modalities": self.settings.gemini_response_modalities, # Use from AppSettings
+            "speech_config": GenaiSpeechConfig(**speech_config_params), # Uses updated speech_config_params
             "context_window_compression": ContextWindowCompressionConfig(
-                sliding_window=SlidingWindow(),  # SlidingWindow takes no arguments
-                trigger_tokens=self.settings.gemini_context_window_compression_threshold,  # Set threshold here
+                sliding_window=SlidingWindow(),
+                trigger_tokens=self.settings.gemini_context_window_compression_threshold,
             ),
-            "output_audio_transcription": {},  # Enable transcription of model's audio output
+            "output_audio_transcription": {},
         }
         live_connect_config_args["tools"] = [
             {
                 "function_declarations": function_declarations,
             },
         ]
-        logger.info(f"Current tools: {live_connect_config_args['tools']}, current config: {live_connect_config_args}")
         logger.info(f"GeminiRealtimeHandler: Context window compression enabled with trigger_token_count={self.settings.gemini_context_window_compression_threshold}.")
         logger.info("GeminiRealtimeHandler: Output audio transcription enabled.")
+        logger.info(f"GeminiRealtimeHandler: Response modalities set to: {self.settings.gemini_response_modalities}")
 
-        if self.settings.system_message:
-            logger.info(f'GeminiRealtimeHandler: Preparing system message for LiveConnectConfig: "{self.settings.system_message[:100]}..."')
+        # Use self.settings.system_message (which might have been populated by default_system_instruction in main)
+        if self.settings.system_message and self.settings.system_message.strip():
+            logger.info(f'GeminiRealtimeHandler: Preparing system instruction for LiveConnectConfig: "{self.settings.system_message[:100]}..."')
             system_instruction_content = genai.types.Content(
-                parts=[genai.types.Part(text=self.settings.system_message)],
+                parts=[genai.types.Part(text=self.settings.system_message.strip())], # Ensure no leading/trailing whitespace
             )
             live_connect_config_args["system_instruction"] = system_instruction_content
-            # Optional: If you want the system message to appear in the UI immediately via server push
-            # This would require waiting for connection and then sending an AdditionalOutput, which is complex here.
+        else:
+            logger.info("GeminiRealtimeHandler: No system instruction will be sent (system_message is empty or whitespace).")
 
+        logger.debug(f"GeminiRealtimeHandler: Final LiveConnectConfig args before creating LiveConnectConfig object: {live_connect_config_args}")
         live_connect_config = LiveConnectConfig(**live_connect_config_args)
 
         try:
@@ -2355,6 +2360,14 @@ def monitor_heartbeat_thread() -> None:
     help="Context window compression threshold for Gemini backend (if --backend=gemini). (Env: GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD)",
 )
 @click.option(
+    "--default-system-instruction",
+    type=str,
+    envvar="DEFAULT_SYSTEM_INSTRUCTION",
+    default=DEFAULT_SYSTEM_INSTRUCTION_ENV,
+    show_default=True,
+    help="Default system instruction for Gemini backend if no specific system message is provided. (Env: DEFAULT_SYSTEM_INSTRUCTION)",
+)
+@click.option(
     "--llm-host",
     type=str,
     envvar="LLM_HOST",
@@ -2521,6 +2534,7 @@ def main(
     gemini_voice: str,             # Add Gemini arg
     gemini_api_key: str | None,  # Add Gemini arg
     gemini_compression_threshold: int,  # Add Gemini compression threshold arg
+    default_system_instruction_arg: str,
     llm_host: str | None,
     llm_port: str | None,
     llm_model: str,
@@ -2555,6 +2569,7 @@ def main(
     settings.gemini_voice_arg = gemini_voice       # Store Gemini arg
     settings.gemini_api_key = gemini_api_key       # Store Gemini arg
     settings.gemini_context_window_compression_threshold = gemini_compression_threshold  # Store Gemini threshold
+    settings.default_system_instruction = default_system_instruction_arg # Store new arg for AppSettings
 
     settings.preferred_port = port
     settings.host = host
@@ -2606,8 +2621,8 @@ def main(
         logger.info(f"STT language specified: {settings.stt_language_arg}")
         settings.current_stt_language = settings.stt_language_arg
     else:
-        logger.info("No STT language specified (or empty), STT will auto-detect.")
-        settings.current_stt_language = None
+        logger.info("No STT language specified (or empty), STT will auto-detect initially.")
+        settings.current_stt_language = None # This might be overridden by Gemini specific config below
 
     # --- Backend Specific Configuration ---
     if settings.backend == "openai":
@@ -2665,53 +2680,69 @@ def main(
 
         settings.current_tts_speed = 1.0  # Not user-configurable for OpenAI backend via this app
 
-    elif settings.backend == "gemini":  # Add Gemini setup block
+    elif settings.backend == "gemini":
         logger.info("Configuring for 'gemini' backend.")
-        settings.available_models = GEMINI_LIVE_MODELS  # Use the list from config
+        settings.available_models = GEMINI_LIVE_MODELS
 
         if not settings.available_models:
             logger.critical("GEMINI_LIVE_MODELS list is empty. Cannot proceed with Gemini. Exiting.")
             return 1
 
-        chosen_model = settings.gemini_model_arg
-        if chosen_model in settings.available_models:
-            settings.current_llm_model = chosen_model  # Store the chosen Gemini model here
-        else:
+        # Ensure current_llm_model is set to gemini_model_arg for Gemini backend
+        settings.current_llm_model = settings.gemini_model_arg
+        if settings.current_llm_model not in settings.available_models:
             logger.warning(
-                f"Gemini model '{chosen_model}' (from --gemini-model or env) "
+                f"Gemini model '{settings.current_llm_model}' (from --gemini-model or env) "
                 f"is not in the list of supported models: {settings.available_models}. "
                 f"Defaulting to the first available model: '{settings.available_models[0]}'.",
             )
             settings.current_llm_model = settings.available_models[0]
         logger.info(f"Gemini Live Model set to: {settings.current_llm_model}")
-        settings.model_cost_data = {}  # Cost for Gemini live is character-based, handled by handler.
+        settings.model_cost_data = {} # Cost handled by GeminiRealtimeHandler
 
         if not settings.gemini_api_key:
             logger.critical("Gemini API Key (--gemini-api-key or GEMINI_API_KEY env) is REQUIRED for 'gemini' backend. Exiting.")
             return 1
         logger.info("Using dedicated Gemini API Key for 'gemini' backend.")
 
-        settings.available_voices_tts = GEMINI_LIVE_VOICES  # Populate for UI dropdown
-        initial_gemini_voice_preference = settings.gemini_voice_arg
-        if initial_gemini_voice_preference and initial_gemini_voice_preference in GEMINI_LIVE_VOICES:
-            settings.current_gemini_voice = initial_gemini_voice_preference
-        elif GEMINI_LIVE_VOICES:  # Check if list is not empty
-            if initial_gemini_voice_preference:  # Log warning only if a preference was given but not found
-                 logger.warning(f"Gemini voice '{initial_gemini_voice_preference}' not found. Using first available: {GEMINI_LIVE_VOICES[0]}.")
-            settings.current_gemini_voice = GEMINI_LIVE_VOICES[0]
-        else:  # Should not happen if GEMINI_LIVE_VOICES is populated
-            settings.current_gemini_voice = initial_gemini_voice_preference  # Fallback to user preference
-            logger.error(f"No Gemini voices available or specified voice '{settings.current_gemini_voice}' is invalid. Voice may not work.")
+        # Ensure current_gemini_voice is set from AppSettings.gemini_voice_name
+        settings.current_gemini_voice = settings.gemini_voice_name
+        if settings.current_gemini_voice not in GEMINI_LIVE_VOICES:
+            logger.warning(
+                f"Default Gemini voice '{settings.current_gemini_voice}' from AppSettings.gemini_voice_name "
+                f"is not in the available list: {GEMINI_LIVE_VOICES}. "
+                f"Using the first available voice: {GEMINI_LIVE_VOICES[0] if GEMINI_LIVE_VOICES else 'None'}.",
+            )
+            if GEMINI_LIVE_VOICES:
+                settings.current_gemini_voice = GEMINI_LIVE_VOICES[0]
+            else:
+                logger.error("No Gemini voices available in GEMINI_LIVE_VOICES. Voice may not work.")
+                settings.current_gemini_voice = None # Or handle as critical error
         logger.info(f"Initial Gemini voice set to: {settings.current_gemini_voice}")
 
-        # Log warnings if classic backend STT/TTS params are provided unnecessarily
-        # (STT language is common, so not warned here if stt_language is provided)
+        # If system_message (from CLI/env) is empty, use default_system_instruction
+        if not settings.system_message or settings.system_message.isspace():
+            logger.info("System message is empty or whitespace, using default system instruction for Gemini backend.")
+            settings.system_message = settings.default_system_instruction
+        logger.info(f"System message for Gemini backend: '{settings.system_message[:100]}...'")
+
+        # If stt_language_arg (from CLI/env) was not provided, use gemini_language_code from AppSettings
+        # settings.current_stt_language is already populated by stt_language_arg or None.
+        if settings.stt_language_arg is None or not settings.stt_language_arg.strip():
+            logger.info(f"No STT language argument provided (or it was empty) for Gemini backend. Using default from AppSettings: {settings.gemini_language_code}")
+            settings.current_stt_language = settings.gemini_language_code
+        else:
+            # If stt_language_arg was provided, settings.current_stt_language already holds its value.
+             logger.info(f"Using STT language from --stt-language CLI/env for Gemini backend: {settings.current_stt_language}")
+        logger.info(f"Final STT language for Gemini backend: {settings.current_stt_language or 'None (auto-detect by API if not set by gemini_language_code)'}")
+
+        # Log warnings for unused classic backend parameters
         if stt_host != STT_HOST_ENV or stt_port != STT_PORT_ENV or stt_model != STT_MODEL_ENV or stt_api_key is not None:
-            logger.warning("Classic STT host/port/model/api-key parameters are ignored when using 'gemini' backend (except STT language).")
+            logger.warning("Classic STT host/port/model/api-key parameters are ignored when using 'gemini' backend (except STT language via --stt-language).")
         if tts_host != TTS_HOST_ENV or tts_port != TTS_PORT_ENV or tts_model != TTS_MODEL_ENV or tts_voice != DEFAULT_VOICE_TTS_ENV or tts_api_key is not None or tts_speed != float(DEFAULT_TTS_SPEED_ENV):
             logger.warning("Classic TTS host/port/model/voice/api-key/speed parameters are ignored when using 'gemini' backend.")
 
-        settings.current_tts_speed = 1.0  # Not user-configurable for Gemini backend via this app
+        settings.current_tts_speed = 1.0 # Not user-configurable for Gemini
 
     elif settings.backend == "classic":
         logger.info("Configuring for 'classic' backend.")
