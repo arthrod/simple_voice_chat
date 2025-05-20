@@ -3,6 +3,7 @@ import requests
 from typing import List, Dict, Tuple, Optional, Any
 from loguru import logger
 import litellm
+from security import safe_requests
 
 
 def get_models_and_costs_from_proxy(
@@ -43,7 +44,7 @@ def get_models_and_costs_from_proxy(
 
     try:
         logger.info(f"Fetching model info from LLM proxy: {model_info_url}")
-        response = requests.get(
+        response = safe_requests.get(
             model_info_url, headers=headers, timeout=15
         )  # Added timeout
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
