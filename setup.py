@@ -1,5 +1,7 @@
-import setuptools
 from pathlib import Path
+
+import setuptools
+
 
 # --- Read README for Long Description ---
 def _read_readme(filename="README.md"):
@@ -9,12 +11,11 @@ def _read_readme(filename="README.md"):
         with open(readme_path, encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        print(f"Warning: {filename} not found. Long description will be empty.")
-        return "" # CHANGEME: Consider adding a default description if README is missing
+        return ""  # CHANGEME: Consider adding a default description if README is missing
 
 
 setuptools.setup(
-    name="simple-voice-chat", # CHANGEME: Verify or change the package name
+    name="simple-voice-chat",  # CHANGEME: Verify or change the package name
     version="4.2.0",
     author="thiswillbeyourgithub",
     description="A simple voice chat interface using configurable LLM, STT, and TTS providers.",
@@ -23,7 +24,7 @@ setuptools.setup(
     url="https://github.com/thiswillbeyourgithub/simple_voice_chat",
     license="GPLv3",
     packages=setuptools.find_packages(
-        exclude=["*.tests", "*.tests.*", "tests.*", "tests"] # Exclude test directories if any
+        exclude=["*.tests", "*.tests.*", "tests.*", "tests"],  # Exclude test directories if any
     ),
 
     # Include non-code files specified in MANIFEST.in (if you create one)
@@ -32,13 +33,13 @@ setuptools.setup(
     package_data={
         # If 'simple_voice_chat' contains non-python files needed at runtime
         # Example: 'simple_voice_chat': ['index.html', 'static/*']
-        'simple_voice_chat': ['index.html'], # Include index.html
+        "simple_voice_chat": ["index.html"],  # Include index.html
         # Add other necessary non-code files here
     },
 
     # Dependencies are now listed directly here
     install_requires=[
-        "click>=8.0", # Added click
+        "click>=8.0",  # Added click
         "qtpy>=2.4.3",
         "filelock>=3.18.0",
         "fastrtc[vad,tts]>=0.0.23",
@@ -62,7 +63,7 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             # Correctly point to the main function within the simple_voice_chat module
-            "simple-voice-chat=simple_voice_chat.simple_voice_chat:main",
+            "simple-voice-chat=src.simple_voice_chat:main",
         ],
     },
 

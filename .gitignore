@@ -6,3 +6,4 @@ launch.sh
 logs/
 __pycache__
 build
+.venv

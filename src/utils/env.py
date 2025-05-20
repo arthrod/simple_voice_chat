@@ -1,11 +1,10 @@
-"""
-Handles loading environment variables using dotenv and provides access to their raw values.
+"""Handles loading environment variables using dotenv and provides access to their raw values.
 Configuration logic (like building URLs or choosing defaults) should happen
 in the main application script after parsing command-line arguments.
 """
 
 import os
-from typing import Optional
+
 from dotenv import load_dotenv
 
 # from loguru import logger # Logging is deferred to main script
@@ -19,20 +18,20 @@ load_dotenv()
 # Default values here are the *ultimate* fallbacks if neither env var nor CLI arg is set.
 
 # --- LLM Configuration (Classic Backend) ---
-LLM_HOST_ENV: Optional[str] = os.getenv("LLM_HOST")
-LLM_PORT_ENV: Optional[str] = os.getenv("LLM_PORT")
+LLM_HOST_ENV: str | None = os.getenv("LLM_HOST")
+LLM_PORT_ENV: str | None = os.getenv("LLM_PORT")
 DEFAULT_LLM_MODEL_ENV: str = os.getenv(
-    "LLM_MODEL", "openrouter/google/gemini-2.5-pro-preview-03-25"  # Example default
+    "LLM_MODEL", "openrouter/google/gemini-2.5-pro-preview-03-25",  # Example default
 )
-LLM_API_KEY_ENV: Optional[str] = os.getenv("LLM_API_KEY") # For classic backend LLM
+LLM_API_KEY_ENV: str | None = os.getenv("LLM_API_KEY")  # For classic backend LLM
 
 # --- STT Configuration (Classic Backend) ---
 # Defaults changed to OpenAI STT
 STT_HOST_ENV: str = os.getenv("STT_HOST", "api.openai.com")  # Default to OpenAI host
 STT_PORT_ENV: str = os.getenv("STT_PORT", "443")  # Default to HTTPS port
 STT_MODEL_ENV: str = os.getenv("STT_MODEL", "whisper-1")  # Default to OpenAI STT model
-STT_LANGUAGE_ENV: Optional[str] = os.getenv("STT_LANGUAGE") # Relevant for both backends
-STT_API_KEY_ENV: Optional[str] = os.getenv("STT_API_KEY")  # For classic backend STT (e.g., OpenAI STT)
+STT_LANGUAGE_ENV: str | None = os.getenv("STT_LANGUAGE")  # Relevant for both backends
+STT_API_KEY_ENV: str | None = os.getenv("STT_API_KEY")  # For classic backend STT (e.g., OpenAI STT)
 
 # --- STT Confidence Thresholds (Classic Backend) ---
 # Keep as strings for argparse defaults, conversion happens in main script
@@ -45,37 +44,37 @@ STT_MIN_WORDS_THRESHOLD_ENV: str = os.getenv("STT_MIN_WORDS_THRESHOLD", "5")
 TTS_HOST_ENV: str = os.getenv("TTS_HOST", "api.openai.com")  # Default to OpenAI host
 TTS_PORT_ENV: str = os.getenv("TTS_PORT", "443")  # Default to HTTPS port
 TTS_MODEL_ENV: str = os.getenv(
-    "TTS_MODEL", "tts-1"
+    "TTS_MODEL", "tts-1",
 )  # Default to standard OpenAI TTS model
 DEFAULT_VOICE_TTS_ENV: str = os.getenv("TTS_VOICE", "ash")  # Default to an OpenAI voice for classic backend
-TTS_API_KEY_ENV: Optional[str] = os.getenv(
-    "TTS_API_KEY"
+TTS_API_KEY_ENV: str | None = os.getenv(
+    "TTS_API_KEY",
 )  # For classic backend TTS (e.g., OpenAI TTS)
 DEFAULT_TTS_SPEED_ENV: str = os.getenv(
-    "TTS_SPEED", "1.0"
+    "TTS_SPEED", "1.0",
 )  # Keep as string for argparse default
 
 # --- TTS Acronym Preservation (Classic Backend - Kokoro) ---
 TTS_ACRONYM_PRESERVE_LIST_ENV: str = os.getenv("TTS_ACRONYM_PRESERVE_LIST", "")
 
 # --- OpenAI Backend Configuration ---
-OPENAI_API_KEY_ENV: Optional[str] = os.getenv("OPENAI_API_KEY") # Dedicated key for OpenAI backend
+OPENAI_API_KEY_ENV: str | None = os.getenv("OPENAI_API_KEY")  # Dedicated key for OpenAI backend
 OPENAI_REALTIME_MODEL_ENV: str = os.getenv("OPENAI_REALTIME_MODEL", "gpt-4o-mini-realtime-preview-2024-12-17")
-OPENAI_REALTIME_VOICE_ENV: str = os.getenv("OPENAI_REALTIME_VOICE", "alloy") # Default voice for OpenAI realtime backend
+OPENAI_REALTIME_VOICE_ENV: str = os.getenv("OPENAI_REALTIME_VOICE", "alloy")  # Default voice for OpenAI realtime backend
 
 # --- Gemini Backend Configuration ---
-GEMINI_API_KEY_ENV: Optional[str] = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL_ENV: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp") # Default to the known model
-GEMINI_VOICE_ENV: str = os.getenv("GEMINI_VOICE", "Puck") # Default voice for Gemini backend
+GEMINI_API_KEY_ENV: str | None = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL_ENV: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")  # Default to the known model
+GEMINI_VOICE_ENV: str = os.getenv("GEMINI_VOICE", "Puck")  # Default voice for Gemini backend
 GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV: str = os.getenv(
-    "GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD", "16000"
-) # Default threshold for sliding window
+    "GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD", "16000",
+)  # Default threshold for sliding window
 
 # --- Application Configuration ---
 APP_PORT_ENV: str = os.getenv("APP_PORT", "7860")  # Keep as string for argparse default
 
 # --- System Message ---
-SYSTEM_MESSAGE_ENV: Optional[str] = os.getenv("SYSTEM_MESSAGE")
+SYSTEM_MESSAGE_ENV: str | None = os.getenv("SYSTEM_MESSAGE")
 
 # --- Heartbeat Configuration ---
 DISABLE_HEARTBEAT_ENV: str = os.getenv("DISABLE_HEARTBEAT", "False")
@@ -84,42 +83,42 @@ DISABLE_HEARTBEAT_ENV: str = os.getenv("DISABLE_HEARTBEAT", "False")
 # --- Exported Variables ---
 # These are the names available for import into other modules.
 __all__ = [
+    # App
+    "APP_PORT_ENV",
+    "DEFAULT_LLM_MODEL_ENV",
+    "DEFAULT_TTS_SPEED_ENV",
+    "DEFAULT_VOICE_TTS_ENV",
+    "DISABLE_HEARTBEAT_ENV",
+    # Gemini Backend
+    "GEMINI_API_KEY_ENV",
+    "GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV",
+    "GEMINI_MODEL_ENV",
+    "GEMINI_VOICE_ENV",
+    "LLM_API_KEY_ENV",
     # LLM (Classic)
     "LLM_HOST_ENV",
     "LLM_PORT_ENV",
-    "DEFAULT_LLM_MODEL_ENV",
-    "LLM_API_KEY_ENV",
-    # STT (Classic, language also for OpenAI backend)
-    "STT_HOST_ENV",
-    "STT_PORT_ENV",
-    "STT_MODEL_ENV",
-    "STT_LANGUAGE_ENV",
-    "STT_API_KEY_ENV",
-    # STT Thresholds (Classic)
-    "STT_NO_SPEECH_PROB_THRESHOLD_ENV",
-    "STT_AVG_LOGPROB_THRESHOLD_ENV",
-    "STT_MIN_WORDS_THRESHOLD_ENV",
-    # TTS (Classic)
-    "TTS_HOST_ENV",
-    "TTS_PORT_ENV",
-    "TTS_MODEL_ENV",
-    "DEFAULT_VOICE_TTS_ENV",
-    "TTS_API_KEY_ENV",
-    "DEFAULT_TTS_SPEED_ENV",
-    # TTS Acronyms (Classic - Kokoro)
-    "TTS_ACRONYM_PRESERVE_LIST_ENV",
     # OpenAI Backend
     "OPENAI_API_KEY_ENV",
     "OPENAI_REALTIME_MODEL_ENV",
     "OPENAI_REALTIME_VOICE_ENV",
-    # Gemini Backend
-    "GEMINI_API_KEY_ENV",
-    "GEMINI_MODEL_ENV",
-    "GEMINI_VOICE_ENV",
-    "GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV",
-    # App
-    "APP_PORT_ENV",
+    "STT_API_KEY_ENV",
+    "STT_AVG_LOGPROB_THRESHOLD_ENV",
+    # STT (Classic, language also for OpenAI backend)
+    "STT_HOST_ENV",
+    "STT_LANGUAGE_ENV",
+    "STT_MIN_WORDS_THRESHOLD_ENV",
+    "STT_MODEL_ENV",
+    # STT Thresholds (Classic)
+    "STT_NO_SPEECH_PROB_THRESHOLD_ENV",
+    "STT_PORT_ENV",
     # Misc
     "SYSTEM_MESSAGE_ENV",
-    "DISABLE_HEARTBEAT_ENV",
+    # TTS Acronyms (Classic - Kokoro)
+    "TTS_ACRONYM_PRESERVE_LIST_ENV",
+    "TTS_API_KEY_ENV",
+    # TTS (Classic)
+    "TTS_HOST_ENV",
+    "TTS_MODEL_ENV",
+    "TTS_PORT_ENV",
 ]

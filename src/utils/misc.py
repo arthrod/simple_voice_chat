@@ -1,7 +1,8 @@
+import errno
 import socket
 import sys
 import time
-import errno
+
 from loguru import logger
 
 
@@ -18,16 +19,15 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
         s.bind((host, port))
         s.close()
         return False
-    except socket.error as e:
-        if e.errno in [
+    except OSError as e:
+        if e.errno in {
             errno.EADDRINUSE,
             getattr(errno, "WSAEADDRINUSE", None),
-        ]:  # Check both Linux/Windows codes
+        }:  # Check both Linux/Windows codes
             logger.debug(f"Port {port} on {host} is in use ({e.strerror}).")
             return True
-        else:
-            logger.error(f"Unexpected socket error checking port {port}: {e}")
-            return True
+        logger.error(f"Unexpected socket error checking port {port}: {e}")
+        return True
     except Exception as e:
         logger.error(f"Unexpected error checking port {port}: {e}")
         return True

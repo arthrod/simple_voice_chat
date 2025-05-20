@@ -1,23 +1,22 @@
 import asyncio
 import tempfile
 import time
-from typing import Tuple, Optional, Any
+from typing import Any
 
 import numpy as np
+from fastrtc.utils import audio_to_bytes
 from loguru import logger
 from openai import OpenAI
-from fastrtc.utils import audio_to_bytes
 
 
 async def transcribe_audio(
     audio: tuple[int, np.ndarray],
     stt_client: OpenAI,
     stt_model: str,
-    stt_language: Optional[str],
+    stt_language: str | None,
     stt_api_base: str,
-) -> Tuple[bool, str, Any, Optional[str]]:
-    """
-    Transcribes the given audio using the STT server.
+) -> tuple[bool, str, Any, str | None]:
+    """Transcribes the given audio using the STT server.
 
     Args:
         audio: Tuple containing sample rate and audio data as a numpy array.
@@ -58,7 +57,7 @@ async def transcribe_audio(
 
                 stt_response_obj = (
                     await asyncio.to_thread(  # Run blocking STT call in thread
-                        stt_client.audio.transcriptions.create, **stt_args
+                        stt_client.audio.transcriptions.create, **stt_args,
                     )
                 )
             # Log the raw response for debugging potential issues
@@ -69,12 +68,12 @@ async def transcribe_audio(
             if hasattr(stt_response_obj, "text"):
                 prompt = stt_response_obj.text
                 logger.info(
-                    f"Transcription ({stt_end_time - stt_start_time:.2f}s): {prompt}"
+                    f"Transcription ({stt_end_time - stt_start_time:.2f}s): {prompt}",
                 )
                 success = True
             else:
                 logger.error(
-                    f"STT response object lacks 'text' attribute: {stt_response_obj}"
+                    f"STT response object lacks 'text' attribute: {stt_response_obj}",
                 )
                 error_message = "STT response format unexpected (missing text)."
                 success = False
@@ -93,9 +92,8 @@ def check_stt_confidence(
     no_speech_prob_threshold: float,
     avg_logprob_threshold: float,
     min_words_threshold: int,
-) -> Tuple[bool, str]:
-    """
-    Checks the confidence of the STT result based on configured thresholds.
+) -> tuple[bool, str]:
+    """Checks the confidence of the STT result based on configured thresholds.
 
     Args:
         stt_response: The full STT response object.
@@ -118,7 +116,7 @@ def check_stt_confidence(
         reject_transcription = True
         rejection_reason = f"word_count {word_count} < {min_words_threshold}"
         logger.warning(
-            f"Rejecting transcription due to word count: {rejection_reason}. Prompt: '{prompt}'"
+            f"Rejecting transcription due to word count: {rejection_reason}. Prompt: '{prompt}'",
         )
         return reject_transcription, rejection_reason
 
@@ -131,7 +129,7 @@ def check_stt_confidence(
         avg_logprob = getattr(first_segment, "avg_logprob", 0.0)
 
         logger.debug(
-            f"STT Segment 1 Confidence: no_speech_prob={no_speech_prob:.4f}, avg_logprob={avg_logprob:.4f}"
+            f"STT Segment 1 Confidence: no_speech_prob={no_speech_prob:.4f}, avg_logprob={avg_logprob:.4f}",
         )
 
         if no_speech_prob > no_speech_prob_threshold:
@@ -147,14 +145,14 @@ def check_stt_confidence(
 
         if reject_transcription:
             logger.warning(
-                f"Rejecting transcription due to low confidence: {rejection_reason}. Prompt: '{prompt}'"
+                f"Rejecting transcription due to low confidence: {rejection_reason}. Prompt: '{prompt}'",
             )
 
     elif (
         not reject_transcription
     ):  # Only log warning if word count was ok but segments were missing
         logger.warning(
-            "STT response did not contain segments or segments list was empty. Skipping confidence check."
+            "STT response did not contain segments or segments list was empty. Skipping confidence check.",
         )
 
     return reject_transcription, rejection_reason

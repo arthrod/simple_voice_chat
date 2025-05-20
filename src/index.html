@@ -21,7 +21,99 @@
             box-sizing: border-box; /* Include padding in height */
             height: 100%; /* Use full calculated height */
         }
+        /* Content area layout */
+        .content-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+            overflow: auto;
+            box-sizing: border-box;
+        }
 
+        /* Form container styling */
+        .form-container {
+            border: 1px solid #333;
+            padding: 20px;
+            border-radius: 25px; /* Match chat-container */
+            max-height: 40%;
+            overflow-y: auto;
+            background-color: #0a0a0a; /* Match body background */
+            box-sizing: border-box;
+        }
+
+        /* Chat container adjustments */
+        .chat-container {
+            max-height: 60%;
+            flex-grow: 1;
+            min-height: 200px;
+        }
+
+        /* Form elements */
+        .form-card {
+            padding: 12px 16px;
+            margin-bottom: 15px;
+            background-color: #262626; /* Match assistant message background */
+            border: 1px solid #333;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+
+        .form-card:hover {
+            border-color: #555;
+        }
+
+        .form-card.active {
+            border-color: #4CAF50;
+        }
+
+        .form-field-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .required-marker {
+            color: #f44336;
+            font-style: italic;
+            margin-left: 4px;
+        }
+
+        .form-field-value {
+            display: block;
+            width: 100%;
+            padding: 8px 0;
+            margin-bottom: 8px;
+            border-bottom: 1px dashed #555;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .form-field-help {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            font-style: italic;
+            margin-top: 5px;
+        }
+
+        /* Loading and error messages */
+        .loading-indicator {
+            text-align: center;
+            color: #aaa;
+            padding: 10px;
+            font-style: italic;
+        }
+
+        .error-message {
+            color: #f44336;
+            padding: 10px;
+            border: 1px solid #f44336;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
         .container {
             /* max-width: 800px; /* Removed to allow full width */
             margin: 0 auto;
@@ -873,7 +965,13 @@
            </div>
            <!-- End Options Row -->
        </div>
-
+       <div class="content-area">
+           <!-- New form container -->
+           <div class="form-container" id="formContainer">
+               <h2 id="formTitle">Form Fields</h2>
+               <p id="formDescription"></p>
+               <!-- Form fields will be dynamically inserted here -->
+           </div>
         <div class="chat-container">
             <div class="chat-messages" id="chat-messages"></div>
             <!-- Status Indicator is now in the header -->
@@ -891,39 +989,39 @@
         let peerConnection;
         let webrtc_id;
         let isMuted = false;
-        let selectedModel = ''; 
-        let selectedVoice = ""; 
-        let selectedSttLanguage = ""; 
-        let selectedTtsSpeed = 1.0; 
-        let startupTimestampStr = ""; 
-        let chatbotHistory = []; 
-        let cumulativeInputCost = 0.0; 
-        let cumulativeOutputCost = 0.0; 
-        let cumulativeTtsCost = 0.0; 
-        let cumulativeTotalCost = 0.0; 
+        let selectedModel = '';
+        let selectedVoice = "";
+        let selectedSttLanguage = "";
+        let selectedTtsSpeed = 1.0;
+        let startupTimestampStr = "";
+        let chatbotHistory = [];
+        let cumulativeInputCost = 0.0;
+        let cumulativeOutputCost = 0.0;
+        let cumulativeTtsCost = 0.0;
+        let cumulativeTotalCost = 0.0;
         let currentBackend = "classic"; // Default, will be replaced by backend injection
 
         // --- WebRTC Setup State ---
-        let webRtcSetupRetryTimeout = null; 
-        const WEBRTC_SETUP_RETRY_DELAY = 1000; 
+        let webRtcSetupRetryTimeout = null;
+        const WEBRTC_SETUP_RETRY_DELAY = 1000;
 
         // --- UI Zoom State ---
-        let currentZoomLevel = 1.0; 
-        const zoomStep = 0.1; 
-        const minZoom = 0.5;  
-        const maxZoom = 2.0;  
+        let currentZoomLevel = 1.0;
+        const zoomStep = 0.1;
+        const minZoom = 0.5;
+        const maxZoom = 2.0;
         const zoomLocalStorageKey = 'uiZoomLevel';
 
         // --- Model Fuzzy Search State ---
         let modelSearchQuery = '';
         let modelSearchTimeout = null;
-        let allModelOptions = []; 
+        let allModelOptions = [];
         // --- End Model Fuzzy Search State ---
 
         // --- Voice Fuzzy Search State ---
         let voiceSearchQuery = '';
         let voiceSearchTimeout = null;
-        let allVoiceOptions = []; 
+        let allVoiceOptions = [];
         // --- End Voice Fuzzy Search State ---
 
 
@@ -949,53 +1047,53 @@
         }
         // --- End UI Zoom Functions ---
 
-        const audioOutput = document.getElementById('audio-output'); 
-        const ttsPlaybackAudio = document.getElementById('tts-playback-audio'); 
+        const audioOutput = document.getElementById('audio-output');
+        const ttsPlaybackAudio = document.getElementById('tts-playback-audio');
         const muteArea = document.getElementById('mute-area');
         const muteButton = document.getElementById('mute-button');
         const chatMessages = document.getElementById('chat-messages');
         const modelInput = document.getElementById('model-input');
         const modelSuggestions = document.getElementById('model-suggestions');
-        const voiceInput = document.getElementById('voice-input'); 
-        const voiceSuggestions = document.getElementById('voice-suggestions'); 
-        const sttLanguageInput = document.getElementById('stt-language-input'); 
-        const ttsSpeedInput = document.getElementById('tts-speed-input'); 
-        const optionsButton = document.getElementById('options-button'); 
-        const optionsRow = document.getElementById('options-row'); 
+        const voiceInput = document.getElementById('voice-input');
+        const voiceSuggestions = document.getElementById('voice-suggestions');
+        const sttLanguageInput = document.getElementById('stt-language-input');
+        const ttsSpeedInput = document.getElementById('tts-speed-input');
+        const optionsButton = document.getElementById('options-button');
+        const optionsRow = document.getElementById('options-row');
         const clearChatButton = document.getElementById('clear-chat-button');
         const statusIndicator = document.getElementById('status-indicator');
         const statusSpinner = document.getElementById('status-spinner');
-        const statusText = document.getElementById('status-text'); 
-        const toastElement = document.getElementById('toast-notification'); 
-        const costDisplayContainer = document.getElementById('cost-display'); 
-        const costDetails = document.getElementById('cost-details'); 
-        let currentAudioQueue = []; 
-        let isReplaying = false; 
+        const statusText = document.getElementById('status-text');
+        const toastElement = document.getElementById('toast-notification');
+        const costDisplayContainer = document.getElementById('cost-display');
+        const costDetails = document.getElementById('cost-details');
+        let currentAudioQueue = [];
+        let isReplaying = false;
 
         ttsPlaybackAudio.addEventListener('ended', () => {
             console.log("TTS playback audio finished playing.");
             if (isReplaying && currentAudioQueue.length > 0) {
                 playNextInQueue();
             } else {
-                isReplaying = false; 
+                isReplaying = false;
                 console.log("Replay sequence finished or queue empty.");
             }
         });
 
         marked.setOptions({
           breaks: true,
-          gfm: true 
+          gfm: true
         });
 
         let audioLevel = 0;
         let animationFrame;
         let audioContext, analyser, audioSource;
-        let notificationAudioContext; 
+        let notificationAudioContext;
 
         function renderSystemMessageUI(content) {
             if (content && content.trim() !== '') {
-                const messageRow = document.createElement('div'); 
-                messageRow.classList.add('message-row', 'system-row'); 
+                const messageRow = document.createElement('div');
+                messageRow.classList.add('message-row', 'system-row');
                 messageRow.classList.add('assistant-row');
 
 
@@ -1028,13 +1126,13 @@
                 oscillator.connect(gainNode);
                 gainNode.connect(notificationAudioContext.destination);
 
-                oscillator.type = 'sine'; 
-                oscillator.frequency.setValueAtTime(880, notificationAudioContext.currentTime); 
-                gainNode.gain.setValueAtTime(0.3, notificationAudioContext.currentTime); 
-                gainNode.gain.exponentialRampToValueAtTime(0.001, notificationAudioContext.currentTime + 0.3); 
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, notificationAudioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.3, notificationAudioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, notificationAudioContext.currentTime + 0.3);
 
                 oscillator.start(notificationAudioContext.currentTime);
-                oscillator.stop(notificationAudioContext.currentTime + 0.3); 
+                oscillator.stop(notificationAudioContext.currentTime + 0.3);
                 console.debug("Played notification sound.");
 
             } catch (error) {
@@ -1050,8 +1148,8 @@
                     const systemMessageContent = JSON.parse(systemMessageDataElement.textContent || '""');
                     if (systemMessageContent && systemMessageContent.trim() !== '') {
                         console.log("Processing initial system message.");
-                        renderSystemMessageUI(systemMessageContent); 
-                        scrollToBottom(); 
+                        renderSystemMessageUI(systemMessageContent);
+                        scrollToBottom();
 
                         if (!chatbotHistory.some(msg => msg.role === 'system' && msg.content === systemMessageContent)) {
                              chatbotHistory.push({ role: 'system', content: systemMessageContent });
@@ -1174,7 +1272,7 @@
 
 
             if (isConnected) {
-                updateStatusIndicator('idle'); 
+                updateStatusIndicator('idle');
 
                 let indicatorSpan = muteButton.querySelector('.audio-indicator');
                 if (!indicatorSpan) {
@@ -1201,14 +1299,14 @@
                     muteButton.classList.remove('muted');
                 }
 
-            } else { 
+            } else {
                 muteButton.style.display = 'none';
-                muteButton.classList.remove('muted'); 
+                muteButton.classList.remove('muted');
 
                 modelInput.disabled = true;
                 voiceInput.disabled = true;
                 sttLanguageInput.disabled = true;
-                ttsSpeedInput.disabled = true; 
+                ttsSpeedInput.disabled = true;
                 clearChatButton.disabled = true;
                 optionsButton.disabled = true;
 
@@ -1222,7 +1320,7 @@
                     if (peerConnection && ['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
                         updateStatusIndicator('disconnected', 'Disconnected');
                     } else {
-                         updateStatusIndicator('idle'); 
+                         updateStatusIndicator('idle');
                     }
                 }
             }
@@ -1230,16 +1328,16 @@
             muteButton.title = isMuted ? "Unmute (M)" : "Mute (M)";
 
             if (isConnected) {
-                optionsButton.innerHTML = ''; 
+                optionsButton.innerHTML = '';
                 const optionsIconEl = document.createElement('div'); // Renamed to avoid conflict
-                optionsIconEl.style.width = '20px'; 
+                optionsIconEl.style.width = '20px';
                 optionsIconEl.style.height = '20px';
                 optionsIconEl.innerHTML = optionsIconSVG;
                 optionsButton.appendChild(optionsIconEl);
 
-                clearChatButton.innerHTML = ''; 
+                clearChatButton.innerHTML = '';
                 const trashIconEl = document.createElement('div'); // Renamed
-                trashIconEl.style.width = '20px'; 
+                trashIconEl.style.width = '20px';
                 trashIconEl.style.height = '20px';
                 trashIconEl.innerHTML = trashIconSVG;
                 clearChatButton.appendChild(trashIconEl);
@@ -1247,7 +1345,7 @@
                 optionsButton.innerHTML = '';
                 clearChatButton.innerHTML = '';
             }
-            
+
             // Hide/show options based on backend
             if (currentBackend === 'openai' || currentBackend === 'gemini') { // Updated to include gemini
                 // Voice input parent element will be displayed by default if optionsRow is visible.
@@ -1287,7 +1385,7 @@
         }
 
         function setupAudioVisualization(stream) {
-            if (audioContext) { 
+            if (audioContext) {
                 audioContext.close();
             }
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1299,15 +1397,15 @@
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 function updateAudioLevel() {
-                    if (!analyser) return; 
+                    if (!analyser) return;
                     analyser.getByteFrequencyData(dataArray);
                     const average = Array.from(dataArray).reduce((a, b) => a + b, 0) / dataArray.length;
-                    const sensitivityFactor = 3.5; 
+                    const sensitivityFactor = 3.5;
                     audioLevel = Math.min(1, (average / 255) * sensitivityFactor);
 
                     const indicatorSpan = muteButton.querySelector('.audio-indicator');
                     if (indicatorSpan) {
-                        const minOpacity = 0.15; 
+                        const minOpacity = 0.15;
                         const opacity = isMuted ? 0 : minOpacity + audioLevel * (1 - minOpacity);
                         indicatorSpan.style.setProperty('--audio-level-opacity', opacity);
                     }
@@ -1317,7 +1415,7 @@
             } catch (error) {
                 console.error("Error setting up audio source for visualization:", error);
                 showToast("Could not visualize audio.", "error");
-                if (audioContext) audioContext.close(); 
+                if (audioContext) audioContext.close();
                 audioContext = null;
             }
         }
@@ -1330,7 +1428,7 @@
                 statusSpinner.style.display = 'none';
                 statusText.textContent = '';
             } else {
-                statusText.textContent = message || status; 
+                statusText.textContent = message || status;
                 statusSpinner.style.display = (status === 'stt_processing' || status === 'llm_waiting' || status === 'tts_processing' || status === 'connecting') ? 'block' : 'none';
                 statusIndicator.classList.add('visible');
             }
@@ -1338,9 +1436,9 @@
         }
 
 
-        function showToast(message, type = 'error') { 
+        function showToast(message, type = 'error') {
             toastElement.textContent = message;
-            toastElement.className = `toast ${type}`; 
+            toastElement.className = `toast ${type}`;
             toastElement.style.display = 'block';
 
             setTimeout(() => {
@@ -1349,7 +1447,7 @@
         }
 
         async function setupWebRTC() {
-            updateStatusIndicator('connecting', 'Initializing...'); 
+            updateStatusIndicator('connecting', 'Initializing...');
 
             const config = __RTC_CONFIGURATION__;
             if (!config) {
@@ -1364,14 +1462,14 @@
             } catch (error) {
                 console.error("Failed to create RTCPeerConnection:", error);
                 showToast("Failed to initialize connection. WebRTC might not be supported.", "error");
-                updateButtonState(); 
-                updateStatusIndicator('error', 'Connection Init Failed'); 
-                return; 
+                updateButtonState();
+                updateStatusIndicator('error', 'Connection Init Failed');
+                return;
             }
 
             const timeoutId = setTimeout(() => {
                 showToast("Connection is taking longer than usual. Check network/VPN.", "warning");
-            }, 7000); 
+            }, 7000);
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -1446,12 +1544,12 @@
 
                 peerConnection.addEventListener('connectionstatechange', () => {
                     console.log('Connection state changed:', peerConnection.connectionState);
-                    clearTimeout(timeoutId); 
+                    clearTimeout(timeoutId);
 
                     if (peerConnection.connectionState === 'connected') {
                         if (toastElement.classList.contains('warning')) {
                              toastElement.style.display = 'none';
-                             toastElement.className = 'toast'; 
+                             toastElement.className = 'toast';
                         }
                         muteButton.addEventListener('click', toggleMute);
                         sendInputHook();
@@ -1463,9 +1561,9 @@
                          } else if (peerConnection.connectionState === 'disconnected') {
                              showToast("Connection lost.", "warning");
                          }
-                         stop(); 
+                         stop();
                     }
-                    updateButtonState(); 
+                    updateButtonState();
                 });
 
                 webrtc_id = Math.random().toString(36).substring(7);
@@ -1511,20 +1609,20 @@
                 setupEventSource();
 
             } catch (err) {
-                clearTimeout(timeoutId); 
+                clearTimeout(timeoutId);
                 console.error('Error during WebRTC setup:', err);
-                updateStatusIndicator('idle'); 
+                updateStatusIndicator('idle');
 
                 let userMessage = 'Failed to establish connection. Please try again.';
                 if (err instanceof DOMException) {
                     console.error(`DOMException: ${err.name} - ${err.message}`);
                     if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
                         userMessage = 'No microphone found. Retrying in 1 second...';
-                        showToast(userMessage, "warning"); 
+                        showToast(userMessage, "warning");
                         updateStatusIndicator('connecting', 'Mic not found, retrying...');
                         if (webRtcSetupRetryTimeout) clearTimeout(webRtcSetupRetryTimeout);
                         webRtcSetupRetryTimeout = setTimeout(setupWebRTC, WEBRTC_SETUP_RETRY_DELAY);
-                        return; 
+                        return;
                     } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                         userMessage = 'Microphone access denied. Please grant permission in browser settings.';
                     } else if (err.name === 'OperationError') {
@@ -1538,29 +1636,29 @@
                      userMessage = "Received invalid response from server.";
                 }
                 showToast(userMessage, "error");
-                stop(); 
+                stop();
             }
         }
 
-        let eventSource = null; 
+        let eventSource = null;
 
         function formatCostDisplay(costValue) {
             if (typeof costValue !== 'number' || isNaN(costValue)) {
-                return 'N/A'; 
+                return 'N/A';
             }
             let costString = costValue.toFixed(6);
             if (Math.abs(costValue) < 1e-9) {
                 return '0.0';
             }
-            costString = costString.replace(/(\.[0-9]*[1-9])0+$/, '$1'); 
-            costString = costString.replace(/\.0+$/, '.0'); 
+            costString = costString.replace(/(\.[0-9]*[1-9])0+$/, '$1');
+            costString = costString.replace(/\.0+$/, '.0');
             return costString;
         }
 
 
         function setupEventSource() {
             if (eventSource) {
-                eventSource.close(); 
+                eventSource.close();
             }
             console.log(`Setting up EventSource for webrtc_id: ${webrtc_id}`);
             eventSource = new EventSource('/outputs?webrtc_id=' + webrtc_id);
@@ -1579,7 +1677,7 @@
                 try {
                     const eventJson = JSON.parse(event.data);
                     console.log("Status update event received:", eventJson);
-                    updateStatusIndicator(eventJson.status, eventJson.message); 
+                    updateStatusIndicator(eventJson.status, eventJson.message);
                 } catch (error) {
                     console.error("Error processing status_update event:", error, "Raw data:", event.data);
                 }
@@ -1589,9 +1687,23 @@
                 try {
                     const eventJson = JSON.parse(event.data);
                     console.log("Cost update event received:", eventJson);
-                    updateCostDisplay(eventJson.data); 
+                    updateCostDisplay(eventJson.data);
                 } catch (error) {
                     console.error("Error processing cost_update event:", error, "Raw data:", event.data);
+                }
+            });
+
+            eventSource.addEventListener("update_field_from_ai", (event) => {
+                try {
+                    const eventJson = JSON.parse(event.data);
+                    console.log("Field update from AI received:", eventJson);
+
+                    if (eventJson.payload && eventJson.payload.key && eventJson.payload.value !== undefined) {
+                        // Update the field with the AI-provided value
+                        updateFormField(eventJson.payload.key, eventJson.payload.value);
+                    }
+                } catch (error) {
+                    console.error("Error processing update_field_from_ai event:", error, "Raw data:", event.data);
                 }
             });
 
@@ -1599,14 +1711,14 @@
                 try {
                     const eventJson = JSON.parse(event.data);
                     console.log("Chatbot update event received:", eventJson);
-                    addMessage(eventJson.message.role, eventJson.message.content, true); 
+                    addMessage(eventJson.message.role, eventJson.message.content, true);
 
                     if (eventJson.message.role === 'assistant') {
                          updateStatusIndicator('idle');
                     }
                 } catch (error) {
                     console.error("Error processing chatbot_update event:", error, "Raw data:", event.data);
-                     updateStatusIndicator('idle'); 
+                     updateStatusIndicator('idle');
                 }
             });
 
@@ -1614,16 +1726,16 @@
                 try {
                     const eventJson = JSON.parse(event.data);
                     if (statusIndicator.classList.contains('visible') && statusText.textContent.includes('Waiting for AI')) {
-                         updateStatusIndicator('idle'); 
+                         updateStatusIndicator('idle');
                     }
-                    appendAssistantMessageChunk(eventJson.content); 
+                    appendAssistantMessageChunk(eventJson.content);
                 } catch (error) {
                     console.error("Error processing text_chunk_update event:", error, "Raw data:", event.data);
-                     updateStatusIndicator('idle'); 
+                     updateStatusIndicator('idle');
                 }
             });
 
-             eventSource.addEventListener("error_event", (event) => { 
+             eventSource.addEventListener("error_event", (event) => {
                 try {
                     const eventJson = JSON.parse(event.data);
                     console.error("Received error event from backend via SSE:", eventJson.message);
@@ -1641,7 +1753,7 @@
                         // For OpenAI backend, history might be empty, client relies on its own build-up.
                         // For classic backend, this is the definitive history.
                         if (currentBackend === 'classic' || (currentBackend === 'openai' && eventJson.history.length > 0) ) {
-                             chatbotHistory = eventJson.history; 
+                             chatbotHistory = eventJson.history;
                              console.debug("Updated chatbotHistory from final_chatbot_state:", chatbotHistory);
                         } else if (currentBackend === 'openai' && eventJson.history.length === 0) {
                             console.debug("OpenAI backend: final_chatbot_state received with empty history. Client will use its locally constructed history for input_hook.");
@@ -1654,7 +1766,7 @@
                             const audioFiles = finalAssistantMsg.metadata?.tts_audio_file_paths;
 
                             const messageDivs = chatMessages.querySelectorAll('.message.assistant');
-                            const lastMessageDiv = messageDivs[messageDivs.length - 1]; 
+                            const lastMessageDiv = messageDivs[messageDivs.length - 1];
 
                             if (lastMessageDiv && audioFiles && audioFiles.length > 0) {
                                 lastMessageDiv.dataset.audioFiles = JSON.stringify(audioFiles);
@@ -1673,7 +1785,165 @@
                 }
             });
 
+            let currentFormData = null;
 
+            // Function to fetch form data from JSON file
+            async function fetchFormData() {
+                try {
+                    document.getElementById('formContainer').innerHTML = '<div class="loading-indicator">Loading form data...</div>';
+
+                    const response = await fetch('form.json');
+                    if (!response.ok) {
+                        throw new Error(`Failed to load form data: ${response.status} ${response.statusText}`);
+                    }
+
+                    const formData = await response.json();
+                    renderForm(formData);
+                    return formData;
+                } catch (error) {
+                    console.error('Error loading form:', error);
+                    document.getElementById('formContainer').innerHTML = `
+                        <h2>Form Fields</h2>
+                        <div class="error-message">
+                            Error loading form: ${error.message}
+                        </div>
+                    `;
+                    return null;
+                }
+            }
+
+            // Function to render the form
+            function renderForm(formData) {
+                if (!formData) return;
+
+                currentFormData = formData;
+                const formContainer = document.getElementById('formContainer');
+                formContainer.innerHTML = ''; // Clear container
+
+                // Add title and description
+                const titleElement = document.createElement('h2');
+                titleElement.id = 'formTitle';
+                titleElement.textContent = formData.title || 'Form Fields';
+                formContainer.appendChild(titleElement);
+
+                if (formData.description) {
+                    const descElement = document.createElement('p');
+                    descElement.id = 'formDescription';
+                    descElement.textContent = formData.description;
+                    formContainer.appendChild(descElement);
+                }
+
+                // Check if form has content
+                if (!formData.content || Object.keys(formData.content).length === 0) {
+                    const noDataMsg = document.createElement('p');
+                    noDataMsg.textContent = 'No form fields available.';
+                    formContainer.appendChild(noDataMsg);
+                    return;
+                }
+
+                // Get required fields for quick lookup
+                const requiredFields = new Set(formData.required || []);
+
+                // Create form cards
+                for (const key in formData.content) {
+                    if (formData.content.hasOwnProperty(key)) {
+                        const item = formData.content[key];
+
+                        // Create card element
+                        const card = document.createElement('div');
+                        card.className = 'form-card';
+                        card.setAttribute('data-key', key);
+
+                        // Create field label with optional required marker
+                        const label = document.createElement('label');
+                        label.className = 'form-field-label';
+                        label.textContent = item.nome_chave || item.descricao || key;
+
+                        if (requiredFields.has(key)) {
+                            const requiredMarker = document.createElement('span');
+                            requiredMarker.className = 'required-marker';
+                            requiredMarker.textContent = ' (obrigatório)';
+                            label.appendChild(requiredMarker);
+                        }
+                        label.textContent += ': '; // Add colon after the label
+                        card.appendChild(label);
+
+                        // Create value field (underline style)
+                        const value = document.createElement('div');
+                        value.className = 'form-field-value';
+                        value.id = `value-${key}`;
+                        value.textContent = item.value || '_________________________';
+                        card.appendChild(value);
+
+                        // Add help text if available
+                        if (item.text_precedente) {
+                            const help = document.createElement('div');
+                            help.className = 'form-field-help';
+                            help.textContent = `Ajuda: ${item.text_precedente}`;
+                            card.appendChild(help);
+                        }
+
+                        // Add click handler
+                        card.addEventListener('click', () => handleFormCardClick(key));
+
+                        // Add card to container
+                        formContainer.appendChild(card);
+                    }
+                }
+            }
+
+            // Handle form card clicks
+            function handleFormCardClick(key) {
+                console.log(`Card clicked for key: ${key}`);
+
+                if (!currentFormData || !currentFormData.content[key]) {
+                    console.error(`No form data found for key: ${key}`);
+                    return;
+                }
+
+                // Highlight the selected card
+                document.querySelectorAll('.form-card').forEach(card => {
+                    card.style.borderColor = card.getAttribute('data-key') === key ? '#4CAF50' : '#333';
+                });
+
+                const field = currentFormData.content[key];
+                const isRequired = currentFormData.required && currentFormData.required.includes(key);
+                const fieldName = field.nome_chave || field.descricao;
+
+                // Add a message to the chat about the field
+                let message = `Please help me fill the "${fieldName}" field`;
+                if (isRequired) {
+                    message += " (this field is required)";
+                }
+                addMessage('user', message);
+            }
+
+            // Update form field with new value
+            function updateFormField(key, value) {
+                console.log(`Updating field: ${key} = ${value}`);
+
+                if (!currentFormData || !currentFormData.content[key]) {
+                    console.warn(`Attempted to update non-existent field: ${key}`);
+                    return;
+                }
+
+                const valueElement = document.getElementById(`value-${key}`);
+                if (valueElement) {
+                    valueElement.textContent = value || '_________________________';
+
+                    // Update the form data
+                    currentFormData.content[key].value = value;
+
+                    // Highlight the updated field briefly
+                    const cardElement = document.querySelector(`.form-card[data-key="${key}"]`);
+                    if (cardElement) {
+                        cardElement.style.backgroundColor = '#2d4022';
+                        setTimeout(() => {
+                            cardElement.style.backgroundColor = '';
+                        }, 1000);
+                    }
+                }
+            }
             eventSource.onerror = (error) => {
                 console.error("EventSource error:", error);
                 if (eventSource.readyState === EventSource.CLOSED) {
@@ -1702,7 +1972,7 @@
                 console.error("Invalid or missing cost data received.");
                 document.getElementById('input-cost').textContent = 'Err';
                 document.getElementById('output-cost').textContent = 'Err';
-                document.getElementById('tts-cost').textContent = 'Err'; 
+                document.getElementById('tts-cost').textContent = 'Err';
                 document.getElementById('total-cost').textContent = 'Err';
                 return;
             }
@@ -1815,7 +2085,7 @@
             const messageRow = document.createElement('div');
             messageRow.classList.add('message-row');
             messageRow.classList.add(role === 'user' ? 'user-row' : 'assistant-row');
-            if (role === 'system') messageRow.classList.add('system-row'); 
+            if (role === 'system') messageRow.classList.add('system-row');
 
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message', role);
@@ -1830,7 +2100,7 @@
                 replayButton.className = 'replay-button';
                 replayButton.title = 'Replay audio';
                 replayButton.innerHTML = replayIconSVG;
-                messageDiv.appendChild(replayButton); 
+                messageDiv.appendChild(replayButton);
             }
 
             messageRow.appendChild(messageDiv);
@@ -1841,8 +2111,8 @@
 
             const wordSpans = wrapWordsInSpans(contentSpan);
             const timeoutIds = animateWords(wordSpans);
-            messageDiv.dataset.revealTimeouts = JSON.stringify(timeoutIds); 
-            scrollToBottom(); 
+            messageDiv.dataset.revealTimeouts = JSON.stringify(timeoutIds);
+            scrollToBottom();
 
             if (isComplete) {
                 // For OpenAI backend, chatbotHistory is primarily built from chatbot_update events.
@@ -1865,7 +2135,7 @@
 
         function appendAssistantMessageChunk(chunkContent) {
             let lastMessageRow = chatMessages.lastElementChild;
-            let lastMessageDiv; 
+            let lastMessageDiv;
             let contentSpan;
             let replayButton;
             let isNewMessage = false;
@@ -1896,8 +2166,8 @@
                 chatMessages.appendChild(lastMessageRow);
                 isNewMessage = true;
             } else {
-                lastMessageDiv = lastMessageRow.firstChild; 
-                contentSpan = lastMessageDiv.querySelector('span:not(.reveal-word)'); 
+                lastMessageDiv = lastMessageRow.firstChild;
+                contentSpan = lastMessageDiv.querySelector('span:not(.reveal-word)');
                 if (!contentSpan && lastMessageDiv.childNodes.length > 0 && lastMessageDiv.childNodes[0].nodeType === Node.ELEMENT_NODE) {
                     contentSpan = lastMessageDiv.childNodes[0];
                 }
@@ -1907,7 +2177,7 @@
 
                 if (!contentSpan) {
                     console.warn("Could not find content span in existing assistant message. Recreating structure.");
-                    lastMessageDiv.innerHTML = ''; 
+                    lastMessageDiv.innerHTML = '';
                     contentSpan = document.createElement('span');
                     lastMessageDiv.appendChild(contentSpan);
                     if (currentBackend === 'classic') {
@@ -1918,7 +2188,7 @@
                             replayButton.innerHTML = replayIconSVG;
                             lastMessageDiv.appendChild(replayButton);
                         } else {
-                            lastMessageDiv.appendChild(replayButton); 
+                            lastMessageDiv.appendChild(replayButton);
                         }
                     }
                 }
@@ -1936,20 +2206,20 @@
             existingTimeoutIds.forEach(clearTimeout);
 
             const currentRawText = (lastMessageDiv.dataset.rawText || '') + chunkContent;
-            lastMessageDiv.dataset.rawText = currentRawText; 
+            lastMessageDiv.dataset.rawText = currentRawText;
 
             const processedText = preprocessThinkTags(currentRawText);
             contentSpan.innerHTML = marked.parse(processedText);
 
-            const wordSpans = wrapWordsInSpans(contentSpan); 
+            const wordSpans = wrapWordsInSpans(contentSpan);
             const animationDelay = isNewMessage ? 30 : 10;
             const timeoutIds = animateWords(wordSpans, animationDelay);
-            lastMessageDiv.dataset.revealTimeouts = JSON.stringify(timeoutIds); 
-            scrollToBottom(); 
+            lastMessageDiv.dataset.revealTimeouts = JSON.stringify(timeoutIds);
+            scrollToBottom();
         }
 
         function scrollToBottom(conditional = false) {
-            const isScrolledToBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 30; 
+            const isScrolledToBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 30;
             if (!conditional || isScrolledToBottom) {
                 const lastMessage = chatMessages.lastElementChild;
                 if (lastMessage) {
@@ -1963,7 +2233,7 @@
         function resetCumulativeCosts() {
             cumulativeInputCost = 0.0;
             cumulativeOutputCost = 0.0;
-            cumulativeTtsCost = 0.0; 
+            cumulativeTtsCost = 0.0;
             cumulativeTotalCost = 0.0;
             document.getElementById('input-cost').textContent = formatCostDisplay(0.0);
             document.getElementById('output-cost').textContent = formatCostDisplay(0.0);
@@ -1993,7 +2263,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         webrtc_id: webrtc_id,
-                        chatbot: historyToSend 
+                        chatbot: historyToSend
                     })
                 });
                 if (!response.ok) {
@@ -2031,7 +2301,7 @@
                 peerConnection.onconnectionstatechange = null;
 
                 if (peerConnection.sctp && peerConnection.sctp.transport) {
-                } else if (peerConnection.dataChannels) { 
+                } else if (peerConnection.dataChannels) {
                      peerConnection.dataChannels.forEach(channel => channel.close());
                 }
 
@@ -2066,18 +2336,18 @@
                 }
                 peerConnection.close();
                 console.log('PeerConnection closed.');
-                peerConnection = null; 
+                peerConnection = null;
             }
 
             muteButton.removeEventListener('click', toggleMute);
-            updateButtonState(); 
+            updateButtonState();
             audioLevel = 0;
             const indicatorSpan = muteButton.querySelector('.audio-indicator');
             if (indicatorSpan) {
                 indicatorSpan.style.setProperty('--audio-level-opacity', 0);
             }
-            muteButton.classList.remove('muted'); 
-            updateStatusIndicator('idle'); 
+            muteButton.classList.remove('muted');
+            updateStatusIndicator('idle');
             console.log('Stop function finished.');
         }
 
@@ -2085,7 +2355,7 @@
             const spans = [];
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
             let node;
-            const nodesToReplace = []; 
+            const nodesToReplace = [];
 
             while (node = walker.nextNode()) {
                 if (node.parentNode.nodeName === 'SCRIPT' || node.parentNode.nodeName === 'STYLE' || !/\S/.test(node.nodeValue)) {
@@ -2096,13 +2366,13 @@
                 const wordsAndSpaces = node.nodeValue.split(/(\s+)/);
 
                 wordsAndSpaces.forEach(part => {
-                    if (/\S/.test(part)) { 
+                    if (/\S/.test(part)) {
                         const span = document.createElement('span');
                         span.className = 'reveal-word';
                         span.textContent = part;
                         fragment.appendChild(span);
-                        spans.push(span); 
-                    } else if (part.length > 0) { 
+                        spans.push(span);
+                    } else if (part.length > 0) {
                         fragment.appendChild(document.createTextNode(part));
                     }
                 });
@@ -2111,12 +2381,12 @@
             nodesToReplace.forEach(([originalNode, fragment]) => {
                 originalNode.parentNode.replaceChild(fragment, originalNode);
             });
-            return spans; 
+            return spans;
         }
 
-        function animateWords(spans, delayPerWord = 30) { 
+        function animateWords(spans, delayPerWord = 30) {
             let delay = 0;
-            const timeoutIds = []; 
+            const timeoutIds = [];
 
             spans.forEach(span => {
                 const timeoutId = setTimeout(() => {
@@ -2130,7 +2400,7 @@
 
         function playNextInQueue() {
             if (currentAudioQueue.length > 0) {
-                const audioFilename = currentAudioQueue.shift(); 
+                const audioFilename = currentAudioQueue.shift();
                 const audioUrl = `/tts_audio/${startupTimestampStr}/${audioFilename}`;
                 console.log(`Playing next in queue via ttsPlaybackAudio: ${audioUrl}`);
                 ttsPlaybackAudio.src = audioUrl;
@@ -2144,7 +2414,7 @@
                     playNextInQueue();
                 });
             } else {
-                isReplaying = false; 
+                isReplaying = false;
                 console.log("Audio replay queue finished.");
             }
         }
@@ -2156,14 +2426,14 @@
             }
             if (isReplaying) {
                 console.log("Already replaying, stopping previous TTS playback sequence.");
-                ttsPlaybackAudio.pause(); 
-                currentAudioQueue = []; 
+                ttsPlaybackAudio.pause();
+                currentAudioQueue = [];
             }
 
             console.log("Starting audio replay sequence for:", filenames);
-            currentAudioQueue = [...filenames]; 
+            currentAudioQueue = [...filenames];
             isReplaying = true;
-            playNextInQueue(); 
+            playNextInQueue();
         }
 
 
@@ -2213,7 +2483,7 @@
             console.log("Clear Chat button clicked.");
             if (!confirm("Are you sure you want to clear the chat history and reset costs? This will start a new log file.")) {
                 console.log("Clear chat cancelled by user.");
-                return; 
+                return;
             }
             console.log("User confirmed clear chat.");
             chatMessages.innerHTML = '';
@@ -2221,7 +2491,7 @@
             resetCumulativeCosts();
             displayInitialSystemMessage();
             if (webrtc_id) {
-                await sendInputHook(); 
+                await sendInputHook();
             } else {
                 console.log("Skipping input hook on clear chat as connection was never established.");
             }
@@ -2237,12 +2507,12 @@
                 }
                 const result = await response.json();
                 console.log(`Backend confirmed log timestamp reset to: ${result.new_timestamp}`);
-                showToast("Chat cleared. New log file started.", "warning"); 
+                showToast("Chat cleared. New log file started.", "warning");
             } catch (error) {
                 console.error("Error resetting chat log timestamp:", error);
                 showToast(`Chat cleared, but failed to start new log file: ${error.message}`, "error");
             }
-            scrollToBottom(); 
+            scrollToBottom();
         });
 
 
@@ -2255,13 +2525,13 @@
                 const data = await response.json();
                 console.log("Available models data:", data);
 
-                if (!data.available || data.current === undefined) { 
+                if (!data.available || data.current === undefined) {
                      throw new Error("Invalid model data received from server.");
                 }
 
-                selectedModel = data.current; 
-                modelSuggestions.innerHTML = ''; 
-                modelInput.value = ''; 
+                selectedModel = data.current;
+                modelSuggestions.innerHTML = '';
+                modelInput.value = '';
 
                 data.available.sort();
                 allModelOptions = data.available.map(modelId => ({ value: modelId, text: modelId }));
@@ -2274,7 +2544,7 @@
                 });
 
                 if (allModelOptions.some(opt => opt.value === selectedModel)) {
-                    modelInput.value = selectedModel; 
+                    modelInput.value = selectedModel;
                 } else if (allModelOptions.length > 0) {
                     console.warn(`Current model '${selectedModel}' not in available list. Selecting first available: '${allModelOptions[0].value}'`);
                     selectedModel = allModelOptions[0].value;
@@ -2283,10 +2553,10 @@
                      console.error("No available models received from backend.");
                      modelInput.placeholder = 'No models found';
                      modelInput.disabled = true;
-                     return; 
+                     return;
                 }
-                modelInput.disabled = false; 
-                updateButtonState(); 
+                modelInput.disabled = false;
+                updateButtonState();
             } catch (error) {
                 console.error('Error fetching available models:', error);
                 showToast('Failed to load available models.', 'error');
@@ -2300,13 +2570,13 @@
             text = text.toLowerCase();
             let queryIndex = 0;
             let textIndex = 0;
-            let score = 0; 
+            let score = 0;
             let firstMatchIndex = -1;
 
             while (queryIndex < query.length && textIndex < text.length) {
                 if (query[queryIndex] === text[textIndex]) {
                     if (firstMatchIndex === -1) {
-                        firstMatchIndex = textIndex; 
+                        firstMatchIndex = textIndex;
                     }
                     score++;
                     queryIndex++;
@@ -2316,7 +2586,7 @@
             if (queryIndex === query.length) {
                 return { score: score, firstMatchIndex: firstMatchIndex };
             } else {
-                return { score: 0, firstMatchIndex: -1 }; 
+                return { score: 0, firstMatchIndex: -1 };
             }
         }
 
@@ -2342,10 +2612,10 @@
 
 
         async function fetchAndPopulateVoices() {
-            // Removed early return for OpenAI backend. 
+            // Removed early return for OpenAI backend.
             // The /available_voices_tts endpoint handles returning appropriate voices.
             try {
-                const response = await fetch('/available_voices_tts'); 
+                const response = await fetch('/available_voices_tts');
                 if (!response.ok) {
                     throw new Error(`Failed to fetch voices: ${response.status}`);
                 }
@@ -2356,9 +2626,9 @@
                      throw new Error("Invalid voice data received from server.");
                 }
 
-                selectedVoice = data.current; 
-                voiceSuggestions.innerHTML = ''; 
-                voiceInput.value = ''; 
+                selectedVoice = data.current;
+                voiceSuggestions.innerHTML = '';
+                voiceInput.value = '';
 
                 data.available.sort();
                 allVoiceOptions = data.available.map(voiceId => ({ value: voiceId, text: voiceId }));
@@ -2371,19 +2641,19 @@
                 });
 
                 if (selectedVoice && allVoiceOptions.some(opt => opt.value === selectedVoice)) {
-                    voiceInput.value = selectedVoice; 
+                    voiceInput.value = selectedVoice;
                 } else if (allVoiceOptions.length > 0) {
                     console.warn(`Current voice '${selectedVoice}' not in available list or not set. Selecting first available: '${allVoiceOptions[0].value}'`);
                     selectedVoice = allVoiceOptions[0].value;
                     voiceInput.value = selectedVoice;
                 } else {
                      console.error("No available voices received from backend.");
-                     voiceInput.placeholder = 'No voices found'; 
+                     voiceInput.placeholder = 'No voices found';
                      voiceInput.disabled = true;
-                     return; 
+                     return;
                 }
-                voiceInput.disabled = false; 
-                updateButtonState(); 
+                voiceInput.disabled = false;
+                updateButtonState();
             } catch (error) {
                 console.error('Error fetching available voices:', error);
                 showToast('Failed to load available voices.', 'error');
@@ -2394,7 +2664,7 @@
 
         function initializeSttLanguage() {
             const sttLanguageDataElement = document.getElementById('stt-language-data');
-            let initialLanguage = ''; 
+            let initialLanguage = '';
             if (sttLanguageDataElement) {
                 try {
                     initialLanguage = JSON.parse(sttLanguageDataElement.textContent || '""') || '';
@@ -2404,8 +2674,8 @@
             } else {
                 console.warn("STT language data element not found.");
             }
-            selectedSttLanguage = initialLanguage; 
-            sttLanguageInput.value = initialLanguage; 
+            selectedSttLanguage = initialLanguage;
+            sttLanguageInput.value = initialLanguage;
             console.log(`Initialized STT language input with: "${selectedSttLanguage}"`);
         }
 
@@ -2414,11 +2684,11 @@
                 console.log("OpenAI backend: Disabling TTS speed input.");
                 ttsSpeedInput.disabled = true;
                 if(ttsSpeedInput.parentElement) ttsSpeedInput.parentElement.style.display = 'none';
-                ttsSpeedInput.value = ''; 
+                ttsSpeedInput.value = '';
                 return;
             }
             const ttsSpeedDataElement = document.getElementById('tts-speed-data');
-            let initialSpeed = 1.0; 
+            let initialSpeed = 1.0;
             if (ttsSpeedDataElement) {
                 try {
                     const parsedSpeed = JSON.parse(ttsSpeedDataElement.textContent || '1.0');
@@ -2433,8 +2703,8 @@
             } else {
                 console.warn("TTS speed data element not found.");
             }
-            selectedTtsSpeed = initialSpeed; 
-            ttsSpeedInput.value = initialSpeed.toFixed(1); 
+            selectedTtsSpeed = initialSpeed;
+            ttsSpeedInput.value = initialSpeed.toFixed(1);
             console.log(`Initialized TTS speed input with: "${selectedTtsSpeed}"`);
         }
 
@@ -2459,22 +2729,28 @@
                 showToast("Error: Configuration element missing (timestamp). Replay may fail.", "error");
             }
         }
-        
+
         // --- Initializations ---
         document.addEventListener('DOMContentLoaded', () => {
             initializeBackendType();
-            initializeStartupTimestamp(); 
-            loadZoomLevel(); 
-            displayInitialSystemMessage(); 
-            
-            // These depend on backendType
-            fetchAndPopulateModels(); 
-            fetchAndPopulateVoices(); 
-            initializeSttLanguage(); 
-            initializeTtsSpeed(); 
+            initializeStartupTimestamp();
+            loadZoomLevel();
+            displayInitialSystemMessage();
 
-            updateButtonState(); 
-            updateStatusIndicator('idle'); 
+            fetchFormData().then(formData => {
+                if (formData) {
+                    console.log('Form data loaded successfully');
+                }
+            });
+
+            // These depend on backendType
+            fetchAndPopulateModels();
+            fetchAndPopulateVoices();
+            initializeSttLanguage();
+            initializeTtsSpeed();
+
+            updateButtonState();
+            updateStatusIndicator('idle');
 
             // Start WebRTC connection last after UI is set up
             setupWebRTC();
@@ -2515,8 +2791,8 @@
             if (!isValidVoice) {
                 console.warn(`Invalid voice selected: "${newVoice}". Reverting.`);
                 showToast(`Voice "${newVoice}" not found. Please select from the list.`, 'warning');
-                voiceInput.value = previousVoice; 
-                return; 
+                voiceInput.value = previousVoice;
+                return;
             }
             if (newVoice === previousVoice) {
                 console.log("Voice selection hasn't changed. No action needed.");
@@ -2526,14 +2802,14 @@
                 const response = await fetch('/switch_voice', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ voice_name: newVoice }) 
+                    body: JSON.stringify({ voice_name: newVoice })
                 });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `Failed to switch voice (${response.status})`);
                 }
                 const result = await response.json();
-                selectedVoice = newVoice; 
+                selectedVoice = newVoice;
                 let message = `Switched to ${newVoice} voice. Change will apply to the next AI response.`;
                 showToast(message, "warning");
             } catch (error) {
@@ -2548,16 +2824,16 @@
 
 
         modelInput.addEventListener('change', async () => {
-            const newModelName = modelInput.value.trim(); 
-            const previousModelName = selectedModel; 
+            const newModelName = modelInput.value.trim();
+            const previousModelName = selectedModel;
             console.log(`Model input changed to: ${newModelName}`);
 
             const isValidModel = allModelOptions.some(opt => opt.value === newModelName);
             if (!isValidModel) {
                 console.warn(`Invalid model selected: "${newModelName}". Reverting.`);
                 showToast(`Model "${newModelName}" not found. Please select from the list.`, 'warning');
-                modelInput.value = previousModelName; 
-                return; 
+                modelInput.value = previousModelName;
+                return;
             }
             if (newModelName === previousModelName) {
                 console.log("Model selection hasn't changed. No action needed.");
@@ -2567,14 +2843,14 @@
                 const response = await fetch('/switch_model', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ model_name: newModelName }) 
+                    body: JSON.stringify({ model_name: newModelName })
                 });
                  if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({})); 
+                    const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `Failed to switch model (${response.status})`);
                 }
                 const result = await response.json();
-                selectedModel = newModelName; 
+                selectedModel = newModelName;
                 const message = `Switched to ${newModelName} model. Change will apply to the next AI response.`;
                 showToast(message, "warning");
             } catch (error) {
@@ -2587,8 +2863,8 @@
             }
         });
 
-        sttLanguageInput.addEventListener('change', async () => { 
-            const newLanguage = sttLanguageInput.value.trim(); 
+        sttLanguageInput.addEventListener('change', async () => {
+            const newLanguage = sttLanguageInput.value.trim();
             const previousLanguage = selectedSttLanguage;
             console.log(`STT Language input changed to: "${newLanguage}"`);
 
@@ -2600,14 +2876,14 @@
                 const response = await fetch('/switch_stt_language', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stt_language: newLanguage }) 
+                    body: JSON.stringify({ stt_language: newLanguage })
                 });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `Failed to switch STT language (${response.status})`);
                 }
                 const result = await response.json();
-                selectedSttLanguage = newLanguage; 
+                selectedSttLanguage = newLanguage;
                 let message = newLanguage
                     ? `STT language set to '${newLanguage}'. Change will apply to the next transcription.`
                     : `STT language cleared (will use auto-detect). Change will apply to the next transcription.`;
@@ -2622,7 +2898,7 @@
             }
         });
 
-        ttsSpeedInput.addEventListener('change', async () => { 
+        ttsSpeedInput.addEventListener('change', async () => {
             if (currentBackend === 'openai') return; // TTS speed not for OpenAI backend
 
             const newSpeedStr = ttsSpeedInput.value;
@@ -2636,8 +2912,8 @@
             } catch (error) {
                 console.warn(`Invalid TTS speed input: "${newSpeedStr}". Reverting.`);
                 showToast(`Invalid TTS speed. Must be between 0.1 and 4.0.`, 'warning');
-                ttsSpeedInput.value = selectedTtsSpeed.toFixed(1); 
-                return; 
+                ttsSpeedInput.value = selectedTtsSpeed.toFixed(1);
+                return;
             }
 
             const previousSpeed = selectedTtsSpeed;
@@ -2652,15 +2928,15 @@
                 const response = await fetch('/switch_tts_speed', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ tts_speed: newSpeed }) 
+                    body: JSON.stringify({ tts_speed: newSpeed })
                 });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `Failed to switch TTS speed (${response.status})`);
                 }
                 const result = await response.json();
-                selectedTtsSpeed = newSpeed; 
-                ttsSpeedInput.value = selectedTtsSpeed.toFixed(1); 
+                selectedTtsSpeed = newSpeed;
+                ttsSpeedInput.value = selectedTtsSpeed.toFixed(1);
                 let message = `TTS speed set to ${selectedTtsSpeed.toFixed(1)}. Change will apply to the next AI response.`;
                 showToast(message, "warning");
             } catch (error) {
@@ -2680,7 +2956,7 @@
             clearTimeout(modelSearchTimeout);
             modelSearchTimeout = setTimeout(() => {
                 if (query === '') {
-                    modelSuggestions.innerHTML = ''; 
+                    modelSuggestions.innerHTML = '';
                     allModelOptions.forEach(modelOption => {
                         const option = document.createElement('option');
                         option.value = modelOption.value;
@@ -2693,18 +2969,18 @@
                     const matches = allModelOptions
                         .map(option => ({
                             option,
-                            matchResult: simpleFuzzyMatch(query, option.text) 
+                            matchResult: simpleFuzzyMatch(query, option.text)
                         }))
-                        .filter(item => item.matchResult.score > 0) 
+                        .filter(item => item.matchResult.score > 0)
                         .sort((a, b) => {
                             if (b.matchResult.score !== a.matchResult.score) {
                                 return b.matchResult.score - a.matchResult.score;
                             }
                             return a.matchResult.firstMatchIndex - b.matchResult.firstMatchIndex;
                         })
-                        .slice(0, maxSuggestions); 
+                        .slice(0, maxSuggestions);
 
-                    modelSuggestions.innerHTML = ''; 
+                    modelSuggestions.innerHTML = '';
                     if (matches.length > 0) {
                         console.debug("Top fuzzy matches:", matches.map(m => m.option.text));
                         matches.forEach(match => {
@@ -2716,11 +2992,11 @@
                         console.debug("No fuzzy matches found.");
                     }
                 }
-            }, 150); 
+            }, 150);
         });
 
         modelInput.addEventListener('focus', () => {
-            modelInput.select(); 
+            modelInput.select();
         });
 
         voiceInput.addEventListener('input', () => {
@@ -2768,12 +3044,12 @@
                         console.debug("No voice fuzzy matches found.");
                     }
                 }
-            }, 150); 
+            }, 150);
         });
 
         voiceInput.addEventListener('focus', () => {
             // Remove: if (currentBackend === 'openai') return;
-            voiceInput.select(); 
+            voiceInput.select();
         });
 
 
@@ -2785,14 +3061,14 @@
             }
             else if (event.ctrlKey && event.key.toLowerCase() === 'r' && !event.altKey && !event.metaKey) {
                 if (clearChatButton.style.display !== 'none' && !clearChatButton.disabled) {
-                    event.preventDefault(); 
+                    event.preventDefault();
                     console.log("Shortcut: Ctrl+R triggered Clear Chat.");
                     clearChatButton.click();
                 }
             }
             else if (event.shiftKey && event.key.toLowerCase() === 's' && !event.ctrlKey && !event.altKey && !event.metaKey) {
                 if (optionsButton.style.display !== 'none' && !optionsButton.disabled) {
-                    event.preventDefault(); 
+                    event.preventDefault();
                     console.log("Shortcut: Shift+S triggered Options toggle.");
                     optionsButton.click();
                 }
@@ -2801,21 +3077,21 @@
 
         document.addEventListener('wheel', (event) => {
             if (event.ctrlKey) {
-                event.preventDefault(); 
-                const delta = event.deltaY > 0 ? -zoomStep : zoomStep; 
+                event.preventDefault();
+                const delta = event.deltaY > 0 ? -zoomStep : zoomStep;
                 let newZoomLevel = currentZoomLevel + delta;
                 newZoomLevel = Math.max(minZoom, Math.min(maxZoom, newZoomLevel));
-                newZoomLevel = parseFloat(newZoomLevel.toFixed(2)); 
+                newZoomLevel = parseFloat(newZoomLevel.toFixed(2));
                 if (newZoomLevel !== currentZoomLevel) {
                     currentZoomLevel = newZoomLevel;
                     applyZoom(currentZoomLevel);
-                    saveZoomLevel(); 
+                    saveZoomLevel();
                 }
             }
-        }, { passive: false }); 
+        }, { passive: false });
 
         const closeButton = document.getElementById('close-window-button');
-        if (closeButton) { 
+        if (closeButton) {
             closeButton.addEventListener('click', () => {
                 if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.close === 'function') {
                     console.log("Closing window via pywebview API.");
@@ -2836,13 +3112,13 @@
         window.addEventListener('beforeunload', (event) => {
              console.log("beforeunload event triggered.");
              if (peerConnection && peerConnection.connectionState !== 'closed') {
-                 stop(); 
+                 stop();
                  console.log("Cleaned up resources before unload.");
              }
         });
 
         let heartbeatIntervalId = null;
-        const heartbeatIntervalMs = 5000; 
+        const heartbeatIntervalMs = 5000;
 
         async function sendHeartbeat() {
             try {
@@ -2854,7 +3130,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: payload,
-                        keepalive: true 
+                        keepalive: true
                     });
                 }
             } catch (error) {
@@ -2868,10 +3144,10 @@
              console.log("unload event triggered. Attempting final heartbeat beacon.");
              if (navigator.sendBeacon) {
                  const payload = JSON.stringify({ timestamp: new Date().toISOString(), status: 'unloading' });
-                 navigator.sendBeacon('/heartbeat', payload); 
+                 navigator.sendBeacon('/heartbeat', payload);
              }
              if (heartbeatIntervalId) {
-                 clearInterval(heartbeatIntervalId); 
+                 clearInterval(heartbeatIntervalId);
              }
         }, false);
 

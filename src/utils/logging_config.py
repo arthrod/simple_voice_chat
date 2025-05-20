@@ -1,16 +1,15 @@
 import sys
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
+
 def setup_logging(
     console_log_level: str,
-    log_file_path: Optional[Path],
+    log_file_path: Path | None,
     verbose_mode: bool,
-):
-    """
-    Configures Loguru logging for the application.
+) -> None:
+    """Configures Loguru logging for the application.
 
     Args:
         console_log_level: The logging level for the console (e.g., "INFO", "DEBUG").

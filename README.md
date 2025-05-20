@@ -84,12 +84,12 @@ The application will start a web server and attempt to open the interface in a d
 
 ### Running from a Python Script
 
-You can also run the application directly from a Python script by importing and calling the `main` function from `simple_voice_chat.simple_voice_chat`. This allows you to pass arguments programmatically.
+You can also run the application directly from a Python script by importing and calling the `main` function from `src.simple_voice_chat`. This allows you to pass arguments programmatically.
 
 Here's an example:
 
 ```python
-from simple_voice_chat.simple_voice_chat import main
+from src.simple_voice_chat import main
 
 if __name__ == "__main__":
     # Example arguments:
@@ -106,28 +106,28 @@ if __name__ == "__main__":
         # "--stt-api-key", "YOUR_STT_KEY_HERE",    # If classic backend STT needs a key
         # "--tts-api-key", "YOUR_TTS_KEY_HERE",    # If classic backend TTS needs a key
     ]
-    
+
     # The main function expects a list of strings, similar to sys.argv
     # It's decorated with @click.command(), so we call it with .main(args)
     # or by directly invoking it if click handles parsing internally when called this way.
     # For programmatic invocation with click, it's often easier to let click parse:
     import os
     # To ensure LiteLLM runs in production mode if not already set by the main script early enough
-    os.environ['LITELLM_MODE'] = 'PRODUCTION' 
-    
+    os.environ['LITELLM_MODE'] = 'PRODUCTION'
+
     # Call the click command directly
     # Note: click commands usually expect to be called as if from the command line.
     # To pass arguments programmatically to a click command, you typically invoke `main.main(args=args_list, standalone_mode=False)`.
     # However, since `main` is already a click command, we can try to directly invoke it.
     # If `main()` is defined as `def main(): @click.pass_context def cli(ctx, ...)` then `main(args)` works.
     # If `def main(...)` is the click command itself, it consumes args from sys.argv by default.
-    # The `main` function in simple_voice_chat.py is a click command itself: `@click.command(...) def main(...)`
+    # The `main` function in src.py is a click command itself: `@click.command(...) def main(...)`
     # So, to run it programmatically as if from CLI:
     try:
         # sys.argv needs to be manipulated if click is to parse it automatically,
         # or use the programmatic API if available.
         # The simplest way with click
-        main.main(args=args, standalone_mode=False) 
+        main.main(args=args, standalone_mode=False)
     except SystemExit as e:
         # Click commands often call sys.exit(). We can catch this if running in a script.
         print(f"Application exited with status: {e.code}")
@@ -162,7 +162,7 @@ Simple Voice Chat offers a flexible configuration system. Settings can be manage
     ```bash
     simple-voice-chat --help
     ```
-*   **Environment Variable Definitions:** You can also inspect the `simple_voice_chat/utils/env.py` file to see how environment variables are loaded as defaults (e.g., `LLM_MODEL_ENV = os.getenv("LLM_MODEL", ...)`). The `envvar` parameter in `click` options in `simple_voice_chat.py` also shows which environment variables are directly checked.
+*   **Environment Variable Definitions:** You can also inspect the `simple_voice_chat/utils/env.py` file to see how environment variables are loaded as defaults (e.g., `LLM_MODEL_ENV = os.getenv("LLM_MODEL", ...)`). The `envvar` parameter in `click` options in `src.py` also shows which environment variables are directly checked.
 
 **Common Configuration Areas:**
 

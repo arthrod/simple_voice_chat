@@ -1,0 +1,144 @@
+{
+  "title": "aposentadoria_requisicao.",
+  "description": "Formulário para pedir a aposentadoria.",
+  "required": [
+    "chave_1",
+    "chave_2",
+    "chave_3",
+    "chave_4",
+    "chave_5",
+    "chave_6",
+    "chave_8",
+    "chave_9",
+    "chave_10",
+    "chave_11",
+    "chave_12",
+    "chave_13",
+    "chave_14",
+    "chave_15",
+    "chave_16",
+    "chave_18"
+  ],
+  "content": {
+    "chave_1": {
+      "nome_chave": "Nome Completo",
+      "descricao": "Nome completo do requerente.",
+      "text_precedente": "Por favor, informe seu nome completo conforme consta em seus documentos oficiais.",
+      "value": ""
+    },
+    "chave_2": {
+      "nome_chave": "CPF",
+      "descricao": "Número do CPF do requerente.",
+      "text_precedente": "Digite o número do seu CPF (Cadastro de Pessoa Física).",
+      "value": ""
+    },
+    "chave_3": {
+      "nome_chave": "Data de Nascimento",
+      "descricao": "Data de nascimento do requerente.",
+      "text_precedente": "Informe sua data de nascimento no formato DD/MM/AAAA.",
+      "value": ""
+    },
+    "chave_4": {
+      "nome_chave": "Número do Benefício",
+      "descricao": "Número do benefício (se já houver).",
+      "text_precedente": "Se você já possui um número de benefício, informe-o aqui. Caso contrário, deixe em branco.",
+      "value": ""
+    },
+    "chave_5": {
+      "nome_chave": "Endereço Completo",
+      "descricao": "Endereço completo do requerente.",
+      "text_precedente": "Digite seu endereço completo, incluindo rua, número, bairro, cidade, estado e CEP.",
+      "value": ""
+    },
+    "chave_6": {
+      "nome_chave": "Telefone",
+      "descricao": "Telefone para contato.",
+      "text_precedente": "Informe um número de telefone para contato, com DDD.",
+      "value": ""
+    },
+    "chave_7": {
+      "nome_chave": "E-mail",
+      "descricao": "E-mail para contato.",
+      "text_precedente": "Digite um endereço de e-mail válido para contato.",
+      "value": ""
+    },
+    "chave_8": {
+      "nome_chave": "Tipo de Aposentadoria",
+      "descricao": "Tipo de aposentadoria solicitada.",
+      "text_precedente": "Selecione o tipo de aposentadoria que está sendo solicitada (por idade, por tempo de contribuição, especial, etc.).",
+      "value": ""
+    },
+    "chave_9": {
+      "nome_chave": "Tempo de Contribuição",
+      "descricao": "Tempo total de contribuição (em anos e meses).",
+      "text_precedente": "Informe o tempo total de contribuição para o INSS, em anos e meses.",
+      "value": ""
+    },
+    "chave_10": {
+      "nome_chave": "Empregadores Anteriores",
+      "descricao": "Empregadores anteriores (nome e CNPJ).",
+      "text_precedente": "Liste os empregadores anteriores, incluindo nome da empresa e CNPJ.",
+      "value": ""
+    },
+    "chave_11": {
+      "nome_chave": "Períodos de Contribuição",
+      "descricao": "Períodos de contribuição (datas de início e fim).",
+      "text_precedente": "Informe os períodos de contribuição para cada vínculo empregatício (data de início e fim).",
+      "value": ""
+    },
+    "chave_12": {
+      "nome_chave": "Trabalho Especial",
+      "descricao": "Se houve trabalho em condições especiais (insalubridade/periculosidade).",
+      "text_precedente": "Indique se você trabalhou em condições especiais e, em caso afirmativo, detalhe quais foram.",
+      "value": ""
+    },
+    "chave_13": {
+      "nome_chave": "Documentos Anexados",
+      "descricao": "Documentos anexados (RG, CPF, comprovante de residência, etc.).",
+      "text_precedente": "Liste os documentos que estão sendo anexados ao pedido.",
+      "value": ""
+    },
+    "chave_14": {
+      "nome_chave": "Possui Dependentes",
+      "descricao": "Possui dependentes? (sim/não)",
+      "text_precedente": "Informe se possui dependentes e, em caso afirmativo, quantos e quem são.",
+      "value": ""
+    },
+    "chave_15": {
+      "nome_chave": "Benefício Anterior",
+      "descricao": "Já recebeu algum benefício do INSS anteriormente?",
+      "text_precedente": "Indique se já recebeu algum benefício do INSS anteriormente e qual foi.",
+      "value": ""
+    },
+    "chave_16": {
+      "nome_chave": "Motivo do Pedido",
+      "descricao": "Motivo do pedido de aposentadoria.",
+      "text_precedente": "Explique brevemente o motivo do pedido de aposentadoria.",
+      "value": ""
+    },
+    "chave_17": {
+      "nome_chave": "Data do Requerimento",
+      "descricao": "Data do requerimento.",
+      "text_precedente": "Informe a data em que está sendo feito o requerimento.",
+      "value": ""
+    },
+    "chave_18": {
+      "nome_chave": "Assinatura",
+      "descricao": "Assinatura do requerente.",
+      "text_precedente": "Assine digitalmente ou informe que irá assinar presencialmente.",
+      "value": ""
+    },
+    "chave_19": {
+      "nome_chave": "Nome do Procurador",
+      "descricao": "Nome do procurador (se houver).",
+      "text_precedente": "Se o pedido está sendo feito por procurador, informe o nome completo do procurador.",
+      "value": ""
+    },
+    "chave_20": {
+      "nome_chave": "Observações",
+      "descricao": "Observações adicionais.",
+      "text_precedente": "Inclua quaisquer observações ou informações adicionais relevantes ao pedido.",
+      "value": ""
+    }
+  }
+}

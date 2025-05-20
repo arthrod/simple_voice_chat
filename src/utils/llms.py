@@ -1,13 +1,14 @@
 import json
-import requests
-from typing import List, Dict, Tuple, Optional, Any
-from loguru import logger
+from typing import Any
+
 import litellm
+import requests
+from loguru import logger
 
 
 def get_models_and_costs_from_proxy(
-    api_base: str, api_key: Optional[str]
-) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
+    api_base: str, api_key: str | None,
+) -> tuple[list[str], dict[str, dict[str, float]]]:
     """Fetches model names and costs from a LiteLLM-compatible proxy's /model/info endpoint."""
     models = []
     costs = {}
@@ -25,15 +26,15 @@ def get_models_and_costs_from_proxy(
             # Fallback or alternative logic if '/v1' is not present or structure is different
             # This might need adjustment based on expected api_base formats
             logger.warning(
-                f"Could not reliably determine /model/info URL from api_base '{api_base}'. Attempting replacement."
+                f"Could not reliably determine /model/info URL from api_base '{api_base}'. Attempting replacement.",
             )
             model_info_url = api_base.replace(
-                "/v1", "/model/info"
+                "/v1", "/model/info",
             )  # Keep original fallback
 
     except Exception as url_e:
         logger.error(
-            f"Error constructing model info URL from api_base '{api_base}': {url_e}"
+            f"Error constructing model info URL from api_base '{api_base}': {url_e}",
         )
         return models, costs
 
@@ -44,14 +45,14 @@ def get_models_and_costs_from_proxy(
     try:
         logger.info(f"Fetching model info from LLM proxy: {model_info_url}")
         response = requests.get(
-            model_info_url, headers=headers, timeout=15
+            model_info_url, headers=headers, timeout=15,
         )  # Added timeout
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
         data = response.json()
 
         if "data" not in data or not isinstance(data["data"], list):
             logger.error(
-                f"Unexpected format in response from {model_info_url}: 'data' key missing or not a list."
+                f"Unexpected format in response from {model_info_url}: 'data' key missing or not a list.",
             )
             return models, costs
 
@@ -75,11 +76,11 @@ def get_models_and_costs_from_proxy(
                         "output_cost_per_token": float(output_cost),
                     }
                     logger.debug(
-                        f"Loaded cost for {prefixed_model_name} from proxy: Input={input_cost}, Output={output_cost}"
+                        f"Loaded cost for {prefixed_model_name} from proxy: Input={input_cost}, Output={output_cost}",
                     )
                 else:
                     logger.warning(
-                        f"Cost information missing for model '{original_model_name}' (prefixed as '{prefixed_model_name}') in proxy response."
+                        f"Cost information missing for model '{original_model_name}' (prefixed as '{prefixed_model_name}') in proxy response.",
                     )
                     # Use the prefixed name as the key even if costs are missing
                     costs[prefixed_model_name] = {
@@ -98,15 +99,15 @@ def get_models_and_costs_from_proxy(
 
     if not models:
         logger.warning(
-            f"Could not retrieve any models from the LLM proxy at {model_info_url}."
+            f"Could not retrieve any models from the LLM proxy at {model_info_url}.",
         )
     return models, costs
 
 
 # --- Cost Calculation Function (Renamed) ---
 def calculate_llm_cost(
-    model: str, usage: Dict[str, int], model_cost_data: Dict[str, Dict[str, float]]
-) -> Dict[str, Any]:
+    model: str, usage: dict[str, int], model_cost_data: dict[str, dict[str, float]],
+) -> dict[str, Any]:
     """Calculates cost based on LLM usage and provided cost data."""
     # Model name passed here should already be the correct one (prefixed if from proxy)
     cost_data = {
@@ -154,10 +155,10 @@ def calculate_llm_cost(
                 "input_cost": input_cost,
                 "output_cost": output_cost,
                 "total_cost": total_cost,
-            }
+            },
         )
         logger.info(
-            f"Calculated cost for {model}: Input=${input_cost:.6f}, Output=${output_cost:.6f}, Total=${total_cost:.6f}"
+            f"Calculated cost for {model}: Input=${input_cost:.6f}, Output=${output_cost:.6f}, Total=${total_cost:.6f}",
         )
 
     except Exception as e:
@@ -171,7 +172,7 @@ def calculate_llm_cost(
 
 
 def get_models_and_costs_from_litellm() -> (
-    Tuple[List[str], Dict[str, Dict[str, float]]]
+    tuple[list[str], dict[str, dict[str, float]]]
 ):
     """Fetches model names and costs using litellm.model_cost."""
     models = []
@@ -183,7 +184,7 @@ def get_models_and_costs_from_litellm() -> (
 
         if not available_litellm_models:
             logger.warning(
-                "LiteLLM reported no available models with cost information (litellm.model_cost)."
+                "LiteLLM reported no available models with cost information (litellm.model_cost).",
             )
             return models, costs
 
@@ -200,11 +201,11 @@ def get_models_and_costs_from_litellm() -> (
                     "output_cost_per_token": float(output_cost),
                 }
                 logger.debug(
-                    f"Loaded cost for {model_name} from litellm.model_cost: Input={input_cost}, Output={output_cost}"
+                    f"Loaded cost for {model_name} from litellm.model_cost: Input={input_cost}, Output={output_cost}",
                 )
             else:
                 logger.warning(
-                    f"Cost information missing for model '{model_name}' in litellm.model_cost."
+                    f"Cost information missing for model '{model_name}' in litellm.model_cost.",
                 )
                 costs[model_name] = {
                     "input_cost_per_token": 0.0,

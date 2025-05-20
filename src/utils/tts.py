@@ -2,20 +2,17 @@ import asyncio
 import io
 import json
 import re
-import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import List, Optional, Tuple, Set, Dict, Any  # Added Dict, Any
+from typing import Any  # Added Dict, Any
 
-import numpy as np
 import requests
 from loguru import logger
 from openai import OpenAI  # Assuming OpenAI client is used, adjust if different
-from pydub import AudioSegment
 
 
-def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
+def get_voices(tts_base_url: str, api_key: str | None) -> list[str]:
     """Fetches available TTS voices from the server."""
     voices = []
     voices_url = f"{tts_base_url}/audio/voices"  # Correct endpoint path
@@ -26,7 +23,7 @@ def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
     try:
         logger.info(f"Fetching available TTS voices: {voices_url}")
         response = requests.get(
-            voices_url, headers=headers, timeout=10
+            voices_url, headers=headers, timeout=10,
         )  # Added timeout
         response.raise_for_status()
         data = response.json()
@@ -37,12 +34,12 @@ def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
             logger.debug(f"Available voices: {voices}")
         else:
             logger.error(
-                f"Unexpected format in response from {voices_url}: 'voices' key missing or not a list."
+                f"Unexpected format in response from {voices_url}: 'voices' key missing or not a list.",
             )
 
     except requests.exceptions.RequestException as e:
         logger.error(
-            f"HTTP error fetching voices from {voices_url}: {e}"
+            f"HTTP error fetching voices from {voices_url}: {e}",
         )  # Loguru captures traceback by default on error level if configured, or use logger.exception()
     except json.JSONDecodeError as e:
         logger.error(f"Failed to decode JSON response from {voices_url}: {e}")
@@ -53,8 +50,8 @@ def get_voices(tts_base_url: str, api_key: Optional[str]) -> List[str]:
 
 
 def prepare_available_voices_data(
-    current_voice: str, available_voices: List[str]
-) -> Dict[str, Any]:
+    current_voice: str, available_voices: list[str],
+) -> dict[str, Any]:
     """Prepares the data structure for the /available_voices_tts endpoint."""
     return {
         "available": available_voices,
@@ -69,17 +66,15 @@ async def generate_tts_for_sentence(
     tts_model: str,  # Pass the model name
     selected_voice: str,  # Pass the selected voice
     tts_speed: float,  # Pass the desired speed
-    acronym_preserve_set: Set[str],  # Pass the set of acronyms to preserve
+    acronym_preserve_set: set[str],  # Pass the set of acronyms to preserve
     temp_dir: Path,  # Directory to save temporary audio files
-) -> str | None: # Changed return type hint to str | None
-    """
-    Generates TTS for the given text, saves it to a temporary MP3 file,
+) -> str | None:  # Changed return type hint to str | None
+    """Generates TTS for the given text, saves it to a temporary MP3 file,
     and returns the filename string or None on failure.
     """
-
     if not text or text.isspace():
         logger.warning(
-            "generate_tts_for_sentence called with empty or whitespace text. Skipping."
+            "generate_tts_for_sentence called with empty or whitespace text. Skipping.",
         )
         return None
 
@@ -90,10 +85,9 @@ async def generate_tts_for_sentence(
     processed_text = re.sub(r"^\s*[\*\-\+]\s+", "", text, flags=re.MULTILINE)
     logger.debug(f"Text after markdown bullet stripping: '{processed_text[:100]}...'")
 
-
     if "kokoro" in tts_model:
         logger.debug(
-            f"Applying 'kokoro'-specific text preprocessing for model: {tts_model}"
+            f"Applying 'kokoro'-specific text preprocessing for model: {tts_model}",
         )
 
         # --- Acronym Processing ---
@@ -104,14 +98,13 @@ async def generate_tts_for_sentence(
             if acronym in acronym_preserve_set:
                 logger.debug(f"Preserving acronym: {acronym}")
                 return acronym  # Preserve the acronym
-            else:
-                logger.debug(f"Splitting acronym: {acronym}")
-                return " ".join(acronym)  # Split into letters
+            logger.debug(f"Splitting acronym: {acronym}")
+            return " ".join(acronym)  # Split into letters
 
         # Use word boundaries (\b) to avoid affecting single caps or mixed case words.
         # Apply this processing step by step
         temp_processed_text = re.sub(
-            r"\b([A-Z]{2,})\b", acronym_replacer, processed_text
+            r"\b([A-Z]{2,})\b", acronym_replacer, processed_text,
         )
         logger.debug(f"Text after acronym processing: '{temp_processed_text[:50]}...'")
 
@@ -123,7 +116,7 @@ async def generate_tts_for_sentence(
         # --- Bold Replacement ---
         # Replace **bold** with BOLD (applied to potentially spaced-out text)
         temp_processed_text = re.sub(
-            r"\*\*(.*?)\*\*", lambda m: m.group(1).upper(), temp_processed_text
+            r"\*\*(.*?)\*\*", lambda m: m.group(1).upper(), temp_processed_text,
         )
         logger.debug(f"Text after bold replacement: '{temp_processed_text[:50]}...'")
 
@@ -137,7 +130,7 @@ async def generate_tts_for_sentence(
 
     else:
         logger.debug(
-            f"Skipping 'kokoro'-specific text preprocessing for model: {tts_model}"
+            f"Skipping 'kokoro'-specific text preprocessing for model: {tts_model}",
         )
     # --- End Preprocessing ---
 
@@ -146,12 +139,12 @@ async def generate_tts_for_sentence(
     last_tts_exception = None
 
     logger.debug(
-        f"Starting TTS task for processed sentence (first 50 chars): '{processed_text[:50]}...'"
+        f"Starting TTS task for processed sentence (first 50 chars): '{processed_text[:50]}...'",
     )
 
     for attempt in range(max_tts_retries):
         logger.debug(
-            f"TTS attempt {attempt + 1}/{max_tts_retries} ({selected_voice})..."
+            f"TTS attempt {attempt + 1}/{max_tts_retries} ({selected_voice})...",
         )
         try:
             tts_response = (
@@ -188,27 +181,27 @@ async def generate_tts_for_sentence(
                     # Write the bytes to the file asynchronously if possible, or use thread
                     # Using a simple synchronous write here for simplicity, consider async file I/O if performance critical
                     with open(temp_filepath, "wb") as f:
-                         f.write(tts_audio_bytes.getvalue()) # Write all bytes at once
+                         f.write(tts_audio_bytes.getvalue())  # Write all bytes at once
 
                     logger.info(
-                        f"Finished TTS task for processed sentence after {time.time() - start_tts:.2f}s on attempt {attempt + 1} ({byte_count} bytes), saved to '{temp_filepath}'"
+                        f"Finished TTS task for processed sentence after {time.time() - start_tts:.2f}s on attempt {attempt + 1} ({byte_count} bytes), saved to '{temp_filepath}'",
                     )
-                    return temp_filename # Return the filename string
+                    return temp_filename  # Return the filename string
 
                 except Exception as file_e:
                     logger.error(f"Failed to save TTS audio to temporary file '{temp_filepath}': {file_e}")
-                    last_tts_exception = file_e # Store file saving error as the last exception
+                    last_tts_exception = file_e  # Store file saving error as the last exception
                     # Fall through to retry logic if applicable
 
             else:
                 logger.warning(
-                    f"TTS generation attempt {attempt + 1} produced no audio bytes for processed sentence: '{processed_text[:50]}...'"
+                    f"TTS generation attempt {attempt + 1} produced no audio bytes for processed sentence: '{processed_text[:50]}...'",
                 )
                 last_tts_exception = RuntimeError("TTS produced no audio bytes")
 
         except Exception as e:
             logger.error(
-                f"Error during TTS generation/decoding attempt {attempt + 1} for processed sentence '{processed_text[:50]}...': {e}"
+                f"Error during TTS generation/decoding attempt {attempt + 1} for processed sentence '{processed_text[:50]}...': {e}",
             )
             last_tts_exception = e
 
