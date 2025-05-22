@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import os
 import sys
 import asyncio
+import numpy as np
 
 # Ensure src directory is in Python path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
