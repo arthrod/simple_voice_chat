@@ -86,11 +86,13 @@ from src.utils.env import (
     DEFAULT_LLM_MODEL_ENV,
     DEFAULT_TTS_SPEED_ENV,
     DEFAULT_VOICE_TTS_ENV,
+
     DISABLE_HEARTBEAT_ENV, 
     GEMINI_API_KEY_ENV, 
     GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV, 
     GEMINI_MODEL_ENV, 
     GEMINI_VOICE_ENV, 
+
     DEFAULT_SYSTEM_INSTRUCTION_ENV,
     LLM_API_KEY_ENV,
     LLM_HOST_ENV,
@@ -705,11 +707,13 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
         self.settings = app_settings
         self.client: genai.Client | None = None
         self.session: genai.live.AsyncLiveConnectSession | None = None
+
         self._outgoing_audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._audio_sender_task: asyncio.Task | None = None
         self.output_queue: asyncio.Queue = asyncio.Queue()
         self.current_stt_language_code = self.settings.current_stt_language
         self.current_gemini_voice = self.settings.current_gemini_voice
+
 
         self._current_input_chars: int = 0
         self._current_output_chars: int = 0
@@ -827,16 +831,19 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
             await self.output_queue.put(None) 
             return
 
+
         self.client = genai.Client(api_key=self.settings.gemini_api_key)
         
         logger.info(f"GeminiRealtimeHandler: Initializing with STT language: {self.current_stt_language_code or 'auto-detect by API'}, Voice: {self.current_gemini_voice}")
         processed_language_code_for_api = self.current_stt_language_code
         if processed_language_code_for_api and len(processed_language_code_for_api) == 2 and "-" not in processed_language_code_for_api:
             if processed_language_code_for_api.lower() != "pt-br":
+
                  processed_language_code_for_api = f"{processed_language_code_for_api}-{processed_language_code_for_api.upper()}"
                  logger.info(f"GeminiRealtimeHandler: Formatted 2-letter language code to: {processed_language_code_for_api} for API.")
             else:
                 logger.info(f"GeminiRealtimeHandler: Using language code '{processed_language_code_for_api}' as is for API (e.g. pt-BR).")
+
 
         speech_config_params: dict[str, Any] = {
             "voice_config": genai.types.VoiceConfig(
@@ -846,6 +853,7 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
         if processed_language_code_for_api:
             speech_config_params["language_code"] = processed_language_code_for_api
         
+
         function_declarations = [
             {
                 "name": "atualizar_campo_formulario", "description": "Atualiza o valor de um campo específico no formulário",
@@ -858,6 +866,7 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
         ]
 
         live_connect_config_args: dict[str, Any] = {
+
             "response_modalities": self.settings.gemini_response_modalities,
             "speech_config": genai.types.SpeechConfig(**speech_config_params),
             "context_window_compression": genai.types.ContextWindowCompressionConfig(
@@ -874,6 +883,7 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
             live_connect_config_args["system_instruction"] = system_instruction_content
         
         live_connect_config = genai.types.LiveConnectConfig(**live_connect_config_args)
+
 
         try:
             self._reset_turn_usage_state()
@@ -1109,6 +1119,1017 @@ class GeminiRealtimeHandler(AsyncStreamHandler):
 # --- Pywebview API Class ---
 # ... (Api class - unchanged) ...
 # --- Heartbeat Monitoring Thread ---
-# ... (monitor_heartbeat_thread function - unchanged) ...
-# --- Main Click Command ---
-# ... (main function - unchanged) ...
+
+
+def monitor_heartbeat_thread() -> None:
+    global last_heartbeat_time, uvicorn_server, pywebview_window, shutdown_event
+    logger.info("Heartbeat monitor thread started.")
+    initial_wait_done = False
+
+    while not shutdown_event.is_set():
+        if last_heartbeat_time is None:
+            if not initial_wait_done:
+                logger.info(
+                    f"Waiting for the first heartbeat (timeout check in {heartbeat_timeout * 2}s)...",
+                )
+                shutdown_event.wait(heartbeat_timeout * 2)
+                initial_wait_done = True
+                if shutdown_event.is_set():
+                    break
+                continue
+            logger.debug("Still waiting for first heartbeat...")
+            shutdown_event.wait(5)
+            if shutdown_event.is_set():
+                break
+            continue
+
+        time_since_last = (
+            datetime.datetime.now(datetime.UTC) - last_heartbeat_time
+        )
+        logger.debug(
+            f"Time since last heartbeat: {time_since_last.total_seconds():.1f}s",
+        )
+
+        if time_since_last.total_seconds() > heartbeat_timeout:
+            if not settings.disable_heartbeat:
+                logger.warning(
+                    f"Heartbeat timeout ({heartbeat_timeout}s exceeded). Initiating shutdown.",
+                )
+                if uvicorn_server:
+                    logger.info("Signaling Uvicorn server to stop...")
+                    uvicorn_server.should_exit = True
+                else:
+                    logger.warning(
+                        "Uvicorn server instance not found, cannot signal shutdown.",
+                    )
+
+                if pywebview_window:
+                    logger.info("Destroying pywebview window...")
+                    try:
+                        pywebview_window.destroy()
+                    except Exception as e:
+                        logger.error(
+                            f"Error destroying pywebview window from monitor thread: {e}",
+                        )
+                break  # Break loop to terminate monitor thread after shutdown initiated
+            logger.info(
+                f"Heartbeat timeout ({heartbeat_timeout}s exceeded), but heartbeat monitoring is disabled. Not shutting down.",
+            )
+            # Reset last_heartbeat_time to prevent constant logging of this message if client truly disconnected badly
+            # This means we'd only log this once, then wait for a new "first" heartbeat.
+            last_heartbeat_time = None
+            initial_wait_done = False  # Re-trigger initial wait logic
+            logger.info("Resetting heartbeat state to wait for a new initial heartbeat.")
+
+        shutdown_event.wait(5)
+    logger.info("Heartbeat monitor thread finished.")
+
+
+@click.command(help="Run a simple voice chat interface using a configurable LLM provider, STT server, and TTS.")
+@click.option(
+    "--host",
+    type=str,
+    default="127.0.0.1",
+    show_default=True,
+    help="Host address to bind the FastAPI server to.",
+)
+@click.option(
+    "--port",
+    type=click.INT,
+    envvar="APP_PORT",
+    default=int(APP_PORT_ENV),
+    show_default=True,
+    help="Preferred port to run the FastAPI server on. (Env: APP_PORT)",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Enable verbose logging (DEBUG level).",
+)
+@click.option(
+    "--browser",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Launch the application in the default web browser instead of a dedicated GUI window.",
+)
+@click.option(
+    "--system-message",
+    type=str,
+    envvar="SYSTEM_MESSAGE",
+    default=SYSTEM_MESSAGE_ENV,
+    show_default=True,
+    help="System message to prepend to the chat history. (Env: SYSTEM_MESSAGE)",
+)
+@click.option(
+    "--disable-heartbeat",
+    is_flag=True,
+    envvar="DISABLE_HEARTBEAT",
+    default=(DISABLE_HEARTBEAT_ENV.lower() == "true"),  # Convert string "False" to bool False
+    show_default=True,
+    help="Disable heartbeat timeout check (application will not exit if browser tab is closed without proper shutdown). (Env: DISABLE_HEARTBEAT)",
+)
+@click.option(
+    "--backend",
+    type=click.Choice(["classic", "openai", "gemini"], case_sensitive=False),  # Add "gemini"
+    default="classic",
+    show_default=True,
+    help="Backend to use for voice processing. 'classic' uses separate STT/LLM/TTS. 'openai' uses OpenAI's realtime voice API. 'gemini' uses Google's Gemini Live Connect API (Alpha).",
+)
+@click.option(
+    "--openai-realtime-model",
+    type=str,
+    envvar="OPENAI_REALTIME_MODEL",
+    default=OPENAI_REALTIME_MODEL_ENV,
+    show_default=True,
+    help="OpenAI realtime API model to use (if --backend=openai). (Env: OPENAI_REALTIME_MODEL)",
+)
+@click.option(
+    "--openai-realtime-voice",
+    type=str,
+    envvar="OPENAI_REALTIME_VOICE",
+    default=OPENAI_REALTIME_VOICE_ENV,
+    show_default=True,
+    help="Default voice for OpenAI realtime backend (if --backend=openai). (Env: OPENAI_REALTIME_VOICE)",
+)
+@click.option(
+    "--openai-api-key",
+    type=str,
+    envvar="OPENAI_API_KEY",
+    default=OPENAI_API_KEY_ENV,
+    show_default=True,
+    help="API key for OpenAI services (REQUIRED if --backend=openai). (Env: OPENAI_API_KEY)",
+)
+# Add Gemini CLI options
+@click.option(
+    "--gemini-model",
+    type=str,
+    envvar="GEMINI_MODEL",
+    default=GEMINI_MODEL_ENV,
+    show_default=True,
+    help="Gemini model to use (if --backend=gemini). (Env: GEMINI_MODEL)",
+)
+@click.option(
+    "--gemini-voice",
+    type=str,
+    envvar="GEMINI_VOICE",
+    default=GEMINI_VOICE_ENV,
+    show_default=True,
+    help="Default voice for Gemini backend (if --backend=gemini). (Env: GEMINI_VOICE)",
+)
+@click.option(
+    "--gemini-api-key",
+    type=str,
+    envvar="GEMINI_API_KEY",
+    default=GEMINI_API_KEY_ENV,
+    show_default=True,
+    help="API key for Google Gemini services (REQUIRED if --backend=gemini). (Env: GEMINI_API_KEY)",
+)
+@click.option(
+    "--gemini-compression-threshold",
+    type=click.INT,
+    envvar="GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD",
+    default=int(GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD_ENV),
+    show_default=True,
+    help="Context window compression threshold for Gemini backend (if --backend=gemini). (Env: GEMINI_CONTEXT_WINDOW_COMPRESSION_THRESHOLD)",
+)
+@click.option(
+    "--default-system-instruction",
+    type=str,
+    envvar="DEFAULT_SYSTEM_INSTRUCTION",
+    default=DEFAULT_SYSTEM_INSTRUCTION_ENV,
+    show_default=True,
+    help="Default system instruction for Gemini backend if no specific system message is provided. (Env: DEFAULT_SYSTEM_INSTRUCTION)",
+)
+@click.option(
+    "--llm-host",
+    type=str,
+    envvar="LLM_HOST",
+    default=LLM_HOST_ENV,
+    show_default=True,
+    help="Host address of the LLM proxy server (classic backend, optional). (Env: LLM_HOST)",
+)
+@click.option(
+    "--llm-port",
+    type=str,
+    envvar="LLM_PORT",
+    default=LLM_PORT_ENV,
+    show_default=True,
+    help="Port of the LLM proxy server (classic backend, optional). (Env: LLM_PORT)",
+)
+@click.option(
+    "--llm-model",
+    type=str,
+    envvar="LLM_MODEL",
+    default=DEFAULT_LLM_MODEL_ENV,
+    show_default=True,
+    help="Default LLM model to use for classic backend (e.g., 'gpt-4o', 'litellm_proxy/claude-3-opus'). (Env: LLM_MODEL)",
+)
+@click.option(
+    "--llm-api-key",
+    type=str,
+    envvar="LLM_API_KEY",
+    default=LLM_API_KEY_ENV,
+    show_default=True,
+    help="API key for the LLM provider/proxy (classic backend, optional). (Env: LLM_API_KEY)",
+)
+@click.option(
+    "--stt-host",
+    type=str,
+    envvar="STT_HOST",
+    default=STT_HOST_ENV,
+    show_default=True,
+    help="Host address of the STT server (classic backend). (Env: STT_HOST)",
+)
+@click.option(
+    "--stt-port",
+    type=str,
+    envvar="STT_PORT",
+    default=STT_PORT_ENV,
+    show_default=True,
+    help="Port of the STT server (classic backend). (Env: STT_PORT)",
+)
+@click.option(
+    "--stt-model",
+    type=str,
+    envvar="STT_MODEL",
+    default=STT_MODEL_ENV,
+    show_default=True,
+    help="STT model to use (classic backend). (Env: STT_MODEL)",
+)
+@click.option(
+    "--stt-language",
+    type=str,
+    envvar="STT_LANGUAGE",
+    default=STT_LANGUAGE_ENV,
+    show_default=True,
+    help="Language code for STT (e.g., 'en', 'fr'). Used by both backends. If unset, Whisper usually auto-detects. (Env: STT_LANGUAGE)",
+)
+@click.option(
+    "--stt-api-key",
+    type=str,
+    envvar="STT_API_KEY",
+    default=STT_API_KEY_ENV,
+    show_default=True,
+    help="API key for the STT server (classic backend, e.g., for OpenAI STT). (Env: STT_API_KEY)",
+)
+@click.option(
+    "--stt-no-speech-prob-threshold",
+    type=click.FLOAT,
+    envvar="STT_NO_SPEECH_PROB_THRESHOLD",
+    default=float(STT_NO_SPEECH_PROB_THRESHOLD_ENV),
+    show_default=True,
+    help="STT confidence (classic backend): Reject if no_speech_prob > this. (Env: STT_NO_SPEECH_PROB_THRESHOLD)",
+)
+@click.option(
+    "--stt-avg-logprob-threshold",
+    type=click.FLOAT,
+    envvar="STT_AVG_LOGPROB_THRESHOLD",
+    default=float(STT_AVG_LOGPROB_THRESHOLD_ENV),
+    show_default=True,
+    help="STT confidence (classic backend): Reject if avg_logprob < this. (Env: STT_AVG_LOGPROB_THRESHOLD)",
+)
+@click.option(
+    "--stt-min-words-threshold",
+    type=click.INT,
+    envvar="STT_MIN_WORDS_THRESHOLD",
+    default=int(STT_MIN_WORDS_THRESHOLD_ENV),
+    show_default=True,
+    help="STT confidence (classic backend): Reject if word count < this. (Env: STT_MIN_WORDS_THRESHOLD)",
+)
+@click.option(
+    "--tts-host",
+    type=str,
+    envvar="TTS_HOST",
+    default=TTS_HOST_ENV,
+    show_default=True,
+    help="Host address of the TTS server (classic backend). (Env: TTS_HOST)",
+)
+@click.option(
+    "--tts-port",
+    type=str,
+    envvar="TTS_PORT",
+    default=TTS_PORT_ENV,
+    show_default=True,
+    help="Port of the TTS server (classic backend). (Env: TTS_PORT)",
+)
+@click.option(
+    "--tts-model",
+    type=str,
+    envvar="TTS_MODEL",
+    default=TTS_MODEL_ENV,
+    show_default=True,
+    help="TTS model to use (classic backend). (Env: TTS_MODEL)",
+)
+@click.option(
+    "--tts-voice",
+    type=str,
+    envvar="TTS_VOICE",  # This is for CLASSIC backend TTS voice
+    default=DEFAULT_VOICE_TTS_ENV,
+    show_default=True,
+    help="Default TTS voice to use (classic backend). (Env: TTS_VOICE)",
+)
+@click.option(
+    "--tts-api-key",
+    type=str,
+    envvar="TTS_API_KEY",
+    default=TTS_API_KEY_ENV,
+    show_default=True,
+    help="API key for the TTS server (classic backend, e.g., for OpenAI TTS). (Env: TTS_API_KEY)",
+)
+@click.option(
+    "--tts-speed",
+    type=click.FLOAT,
+    envvar="TTS_SPEED",
+    default=float(DEFAULT_TTS_SPEED_ENV),
+    show_default=True,
+    help="Default TTS speed multiplier (classic backend). (Env: TTS_SPEED)",
+)
+@click.option(
+    "--tts-acronym-preserve-list",
+    type=str,
+    envvar="TTS_ACRONYM_PRESERVE_LIST",
+    default=TTS_ACRONYM_PRESERVE_LIST_ENV,
+    show_default=True,
+    help="Comma-separated list of acronyms to preserve during TTS (classic backend, Kokoro TTS). (Env: TTS_ACRONYM_PRESERVE_LIST)",
+)
+def main(
+    host: str,
+    port: int,
+    verbose: bool,
+    browser: bool,
+    system_message: str | None,
+    disable_heartbeat: bool,
+    backend: str,
+    openai_realtime_model: str,
+    openai_realtime_voice: str,  # New CLI option for OpenAI backend voice
+    openai_api_key: str | None,
+    gemini_model: str,             # Add Gemini arg
+    gemini_voice: str,             # Add Gemini arg
+    gemini_api_key: str | None,  # Add Gemini arg
+    gemini_compression_threshold: int,  # Add Gemini compression threshold arg
+    default_system_instruction_arg: str,
+    llm_host: str | None,
+    llm_port: str | None,
+    llm_model: str,
+    llm_api_key: str | None,
+    stt_host: str,
+    stt_port: str,
+    stt_model: str,
+    stt_language: str | None,
+    stt_api_key: str | None,
+    stt_no_speech_prob_threshold: float,
+    stt_avg_logprob_threshold: float,
+    stt_min_words_threshold: int,
+    tts_host: str,
+    tts_port: str,
+    tts_model: str,
+    tts_voice: str,  # This is for CLASSIC backend TTS voice
+    tts_api_key: str | None,
+    tts_speed: float,
+    tts_acronym_preserve_list: str,
+) -> int:
+    global uvicorn_server, pywebview_window
+
+    startup_time = datetime.datetime.now()
+    startup_timestamp_str_local = startup_time.strftime("%Y%m%d_%H%M%S")
+
+    settings.startup_timestamp_str = startup_timestamp_str_local
+    settings.backend = backend
+    settings.openai_realtime_model_arg = openai_realtime_model
+    settings.openai_realtime_voice_arg = openai_realtime_voice  # Store initial arg
+    settings.openai_api_key = openai_api_key
+    settings.gemini_model_arg = gemini_model       # Store Gemini arg
+    settings.gemini_voice_arg = gemini_voice       # Store Gemini arg
+    settings.gemini_api_key = gemini_api_key       # Store Gemini arg
+    settings.gemini_context_window_compression_threshold = gemini_compression_threshold  # Store Gemini threshold
+    settings.default_system_instruction = default_system_instruction_arg # Store new arg for AppSettings
+
+    settings.preferred_port = port
+    settings.host = host
+    settings.verbose = verbose
+    settings.browser = browser
+    settings.system_message = system_message.strip() if system_message is not None else ""
+    settings.disable_heartbeat = disable_heartbeat
+
+    # --- Logging Setup (Early) ---
+    console_log_level_str = "DEBUG" if settings.verbose else "INFO"
+    log_file_path_for_setup: Path | None = None
+    log_dir_creation_error_details: str | None = None
+    load_form_data()
+    try:
+        app_name = "SimpleVoiceChat"
+        app_author = "Attila"
+        log_base_dir_path_str: str | None = None
+        try:
+            log_base_dir_path_str = platformdirs.user_log_dir(app_name, app_author)
+        except Exception:
+            try:
+                log_base_dir_path_str = platformdirs.user_data_dir(app_name, app_author)
+            except Exception as e_data_dir:
+                log_dir_creation_error_details = f"Could not find user data directory either ({e_data_dir})."
+
+        if log_base_dir_path_str:
+            log_base_dir = Path(log_base_dir_path_str)
+            settings.app_log_dir = log_base_dir / "logs"
+            settings.app_log_dir.mkdir(parents=True, exist_ok=True)
+            log_file_path_for_setup = settings.app_log_dir / f"log_{settings.startup_timestamp_str}.log"
+        elif not log_dir_creation_error_details:
+            log_dir_creation_error_details = "Failed to determine a valid base directory for logs."
+
+    except Exception as e:
+        log_dir_creation_error_details = f"Failed to set up log directory structure: {e}."
+
+    setup_logging(console_log_level_str, log_file_path_for_setup, settings.verbose)
+    if log_dir_creation_error_details:
+        logger.error(f"Log directory setup failed: {log_dir_creation_error_details} File logging is disabled.")
+
+    logger.info(f"Application Version: {APP_VERSION}")
+    logger.info(f"Using backend: {settings.backend}")
+    if settings.backend == "gemini":
+        logger.warning("The Gemini Live Connect API backend is experimental (uses v1alpha).")
+
+    # --- STT Language (Common to all backends that support it) ---
+    settings.stt_language_arg = stt_language
+    if settings.stt_language_arg:
+        logger.info(f"STT language specified: {settings.stt_language_arg}")
+        settings.current_stt_language = settings.stt_language_arg
+    else:
+        logger.info("No STT language specified (or empty), STT will auto-detect initially.")
+        settings.current_stt_language = None # This might be overridden by Gemini specific config below
+
+    # --- Backend Specific Configuration ---
+    if settings.backend == "openai":
+        logger.info("Configuring for 'openai' backend.")
+
+        settings.available_models = OPENAI_REALTIME_MODELS  # Use the list from config
+
+        if not settings.available_models:
+            logger.critical(
+                "OPENAI_REALTIME_MODELS list is empty in configuration. "
+                "Cannot proceed with OpenAI backend. Exiting.",
+            )
+            return 1
+
+        # Validate the chosen model (from CLI/env, stored in settings.openai_realtime_model_arg)
+        # against the available list.
+        chosen_model = settings.openai_realtime_model_arg
+        if chosen_model in settings.available_models:
+            settings.current_llm_model = chosen_model
+        else:
+            logger.warning(
+                f"OpenAI realtime model '{chosen_model}' (from --openai-realtime-model or env) "
+                f"is not in the list of supported models: {settings.available_models}. "
+                f"Defaulting to the first available model: '{settings.available_models[0]}'.",
+            )
+            settings.current_llm_model = settings.available_models[0]
+
+        logger.info(f"OpenAI Realtime Model set to: {settings.current_llm_model}")
+        settings.model_cost_data = {}  # Cost for OpenAI realtime is handled differently (per token via OPENAI_REALTIME_PRICING)
+
+        if not settings.openai_api_key:
+            logger.critical("OpenAI API Key (--openai-api-key or OPENAI_API_KEY env) is REQUIRED for 'openai' backend. Exiting.")
+            return 1
+        logger.info("Using dedicated OpenAI API Key for 'openai' backend.")
+
+        # OpenAI Realtime Voice
+        settings.available_voices_tts = OPENAI_REALTIME_VOICES  # Populate for UI dropdown
+        initial_openai_voice_preference = settings.openai_realtime_voice_arg
+        if initial_openai_voice_preference and initial_openai_voice_preference in OPENAI_REALTIME_VOICES:
+            settings.current_openai_voice = initial_openai_voice_preference
+        elif OPENAI_REALTIME_VOICES:
+            if initial_openai_voice_preference:
+                 logger.warning(f"OpenAI realtime voice '{initial_openai_voice_preference}' not found. Using first available: {OPENAI_REALTIME_VOICES[0]}.")
+            settings.current_openai_voice = OPENAI_REALTIME_VOICES[0]
+        else:  # Should not happen if OPENAI_REALTIME_VOICES is populated
+            settings.current_openai_voice = initial_openai_voice_preference
+            logger.error(f"No OpenAI realtime voices available or specified voice '{settings.current_openai_voice}' is invalid. Voice may not work.")
+        logger.info(f"Initial OpenAI realtime voice set to: {settings.current_openai_voice}")
+
+        # Log warnings if classic backend STT/TTS params are provided unnecessarily
+        if stt_host != STT_HOST_ENV or stt_port != STT_PORT_ENV or stt_model != STT_MODEL_ENV or stt_api_key is not None:
+            logger.warning("STT host/port/model/api-key parameters are ignored when using 'openai' backend (except STT language).")
+        if tts_host != TTS_HOST_ENV or tts_port != TTS_PORT_ENV or tts_model != TTS_MODEL_ENV or tts_voice != DEFAULT_VOICE_TTS_ENV or tts_api_key is not None or tts_speed != float(DEFAULT_TTS_SPEED_ENV):
+            logger.warning("Classic TTS host/port/model/voice/api-key/speed parameters are ignored when using 'openai' backend.")
+
+        settings.current_tts_speed = 1.0  # Not user-configurable for OpenAI backend via this app
+
+    elif settings.backend == "gemini":
+        logger.info("Configuring for 'gemini' backend.")
+        settings.available_models = GEMINI_LIVE_MODELS
+
+        if not settings.available_models:
+            logger.critical("GEMINI_LIVE_MODELS list is empty. Cannot proceed with Gemini. Exiting.")
+            return 1
+
+        # Ensure current_llm_model is set to gemini_model_arg for Gemini backend
+        settings.current_llm_model = settings.gemini_model_arg
+        if settings.current_llm_model not in settings.available_models:
+            logger.warning(
+                f"Gemini model '{settings.current_llm_model}' (from --gemini-model or env) "
+                f"is not in the list of supported models: {settings.available_models}. "
+                f"Defaulting to the first available model: '{settings.available_models[0]}'.",
+            )
+            settings.current_llm_model = settings.available_models[0]
+        logger.info(f"Gemini Live Model set to: {settings.current_llm_model}")
+        settings.model_cost_data = {} # Cost handled by GeminiRealtimeHandler
+
+        if not settings.gemini_api_key:
+            logger.critical("Gemini API Key (--gemini-api-key or GEMINI_API_KEY env) is REQUIRED for 'gemini' backend. Exiting.")
+            return 1
+        logger.info("Using dedicated Gemini API Key for 'gemini' backend.")
+
+        # Ensure current_gemini_voice is set from AppSettings.gemini_voice_name
+        settings.current_gemini_voice = settings.gemini_voice_name
+        if settings.current_gemini_voice not in GEMINI_LIVE_VOICES:
+            logger.warning(
+                f"Default Gemini voice '{settings.current_gemini_voice}' from AppSettings.gemini_voice_name "
+                f"is not in the available list: {GEMINI_LIVE_VOICES}. "
+                f"Using the first available voice: {GEMINI_LIVE_VOICES[0] if GEMINI_LIVE_VOICES else 'None'}.",
+            )
+            if GEMINI_LIVE_VOICES:
+                settings.current_gemini_voice = GEMINI_LIVE_VOICES[0]
+            else:
+                logger.error("No Gemini voices available in GEMINI_LIVE_VOICES. Voice may not work.")
+                settings.current_gemini_voice = None # Or handle as critical error
+        logger.info(f"Initial Gemini voice set to: {settings.current_gemini_voice}")
+
+        # If system_message (from CLI/env) is empty, use default_system_instruction
+        if not settings.system_message or settings.system_message.isspace():
+            logger.info("System message is empty or whitespace, using default system instruction for Gemini backend.")
+            settings.system_message = settings.default_system_instruction
+        logger.info(f"System message for Gemini backend: '{settings.system_message[:100]}...'")
+
+        # If stt_language_arg (from CLI/env) was not provided, use gemini_language_code from AppSettings
+        # settings.current_stt_language is already populated by stt_language_arg or None.
+        if settings.stt_language_arg is None or not settings.stt_language_arg.strip():
+            logger.info(f"No STT language argument provided (or it was empty) for Gemini backend. Using default from AppSettings: {settings.gemini_language_code}")
+            settings.current_stt_language = settings.gemini_language_code
+        else:
+            # If stt_language_arg was provided, settings.current_stt_language already holds its value.
+             logger.info(f"Using STT language from --stt-language CLI/env for Gemini backend: {settings.current_stt_language}")
+        logger.info(f"Final STT language for Gemini backend: {settings.current_stt_language or 'None (auto-detect by API if not set by gemini_language_code)'}")
+
+        # Log warnings for unused classic backend parameters
+        if stt_host != STT_HOST_ENV or stt_port != STT_PORT_ENV or stt_model != STT_MODEL_ENV or stt_api_key is not None:
+            logger.warning("Classic STT host/port/model/api-key parameters are ignored when using 'gemini' backend (except STT language via --stt-language).")
+        if tts_host != TTS_HOST_ENV or tts_port != TTS_PORT_ENV or tts_model != TTS_MODEL_ENV or tts_voice != DEFAULT_VOICE_TTS_ENV or tts_api_key is not None or tts_speed != float(DEFAULT_TTS_SPEED_ENV):
+            logger.warning("Classic TTS host/port/model/voice/api-key/speed parameters are ignored when using 'gemini' backend.")
+
+        settings.current_tts_speed = 1.0 # Not user-configurable for Gemini
+
+    elif settings.backend == "classic":
+        logger.info("Configuring for 'classic' backend.")
+        # --- LLM Configuration (Classic) ---
+        settings.llm_host_arg = llm_host
+        settings.llm_port_arg = llm_port
+        settings.llm_model_arg = llm_model
+        settings.llm_api_key = llm_api_key
+
+        settings.use_llm_proxy = bool(settings.llm_host_arg and settings.llm_port_arg)
+        if settings.use_llm_proxy:
+            try:
+                llm_port_int = int(settings.llm_port_arg)  # type: ignore
+                settings.llm_api_base = f"http://{settings.llm_host_arg}:{llm_port_int}/v1"
+                logger.info(f"Using LLM proxy at: {settings.llm_api_base}")
+                if settings.llm_api_key:
+                    logger.info("Using LLM API key for proxy.")
+                else:
+                    logger.info("No LLM API key provided for proxy (assumed optional).")
+            except (ValueError, TypeError):
+                logger.error(
+                    f"Error: Invalid LLM port specified: '{settings.llm_port_arg}'. Disabling proxy.",
+                )
+                settings.use_llm_proxy = False
+                settings.llm_api_base = None
+        else:
+            settings.llm_api_base = None
+            logger.info("Not using LLM proxy (using default LLM routing).")
+            if settings.llm_api_key:
+                logger.info("Using LLM API key for direct routing.")
+            else:
+                logger.info("No LLM API key provided for direct routing (will use LiteLLM's environment config).")
+
+        # --- STT Configuration (Classic) ---
+        settings.stt_host_arg = stt_host
+        settings.stt_port_arg = stt_port
+        settings.stt_model_arg = stt_model
+        settings.stt_api_key = stt_api_key
+        settings.stt_no_speech_prob_threshold = stt_no_speech_prob_threshold
+        settings.stt_avg_logprob_threshold = stt_avg_logprob_threshold
+        settings.stt_min_words_threshold = stt_min_words_threshold
+
+        settings.is_openai_stt = settings.stt_host_arg == "api.openai.com"
+        if settings.is_openai_stt:
+            settings.stt_api_base = "https://api.openai.com/v1"
+            logger.info(f"Using OpenAI STT at: {settings.stt_api_base} with model {settings.stt_model_arg}")
+            if not settings.stt_api_key:
+                logger.critical(
+                    "STT_API_KEY (--stt-api-key) is required when using OpenAI STT (stt-host=api.openai.com) with classic backend. Exiting.",
+                )
+                return 1
+            logger.info("Using STT API key for OpenAI STT.")
+        else:
+            try:
+                stt_port_int = int(settings.stt_port_arg)
+                scheme = "http"
+                settings.stt_api_base = f"{scheme}://{settings.stt_host_arg}:{stt_port_int}/v1"
+                logger.info(f"Using Custom STT server at: {settings.stt_api_base} with model {settings.stt_model_arg}")
+                if settings.stt_api_key:
+                    logger.info("Using STT API key for custom STT server.")
+                else:
+                    logger.info("No STT API key provided for custom STT server (assumed optional).")
+            except (ValueError, TypeError):
+                logger.critical(
+                    f"Invalid STT port specified for custom server: '{settings.stt_port_arg}'. Cannot connect. Exiting.",
+                )
+                return 1
+        logger.info(
+            f"STT Confidence Thresholds: no_speech_prob > {settings.stt_no_speech_prob_threshold}, avg_logprob < {settings.stt_avg_logprob_threshold}, min_words < {settings.stt_min_words_threshold}",
+        )
+
+        # --- TTS Configuration (Classic) ---
+        settings.tts_host_arg = tts_host
+        settings.tts_port_arg = tts_port
+        settings.tts_model_arg = tts_model
+        settings.tts_voice_arg = tts_voice  # Classic backend TTS voice
+        settings.tts_api_key = tts_api_key
+        settings.tts_speed_arg = tts_speed
+        settings.tts_acronym_preserve_list_arg = tts_acronym_preserve_list
+
+        settings.is_openai_tts = settings.tts_host_arg == "api.openai.com"
+        if settings.is_openai_tts:
+            settings.tts_base_url = "https://api.openai.com/v1"
+            logger.info(f"Using OpenAI TTS at: {settings.tts_base_url} with model {settings.tts_model_arg}")
+            if not settings.tts_api_key:
+                logger.critical(
+                    "TTS_API_KEY (--tts-api-key) is required when using OpenAI TTS (tts-host=api.openai.com) with classic backend. Exiting.",
+                )
+                return 1
+            logger.info("Using TTS API key for OpenAI TTS.")
+            if settings.tts_model_arg in OPENAI_TTS_PRICING:
+                logger.info(
+                    f"OpenAI TTS pricing for '{settings.tts_model_arg}': ${OPENAI_TTS_PRICING[settings.tts_model_arg]:.2f} / 1M chars",
+                )
+        else:
+            try:
+                tts_port_int = int(settings.tts_port_arg)
+                scheme = "http"
+                settings.tts_base_url = f"{scheme}://{settings.tts_host_arg}:{tts_port_int}/v1"
+                logger.info(f"Using Custom TTS server at: {settings.tts_base_url} with model {settings.tts_model_arg}")
+                if settings.tts_api_key:
+                    logger.info("Using TTS API key for custom TTS server.")
+                else:
+                    logger.info("No TTS API key provided for custom TTS server (assumed optional).")
+            except (ValueError, TypeError):
+                logger.critical(
+                    f"Invalid TTS port specified for custom server: '{settings.tts_port_arg}'. Cannot connect. Exiting.",
+                )
+                return 1
+
+        settings.tts_acronym_preserve_set = {
+            word.strip().upper()
+            for word in settings.tts_acronym_preserve_list_arg.split(",")
+            if word.strip()
+        }
+        logger.debug(f"Loaded TTS_ACRONYM_PRESERVE_SET: {settings.tts_acronym_preserve_set}")
+        settings.current_tts_speed = settings.tts_speed_arg
+        logger.info(f"Initial TTS speed (classic backend): {settings.current_tts_speed:.1f}")
+
+        # --- Initialize Clients (Classic Backend) ---
+        logger.info("Initializing clients for 'classic' backend...")
+        try:
+            settings.stt_client = OpenAI(
+                base_url=settings.stt_api_base,
+                api_key=settings.stt_api_key,
+            )
+            logger.info(f"STT client initialized for classic backend (target: {settings.stt_api_base}).")
+        except Exception as e:
+            logger.critical(f"Failed to initialize STT client for classic backend: {e}. Exiting.")
+            return 1
+
+        try:
+            settings.tts_client = OpenAI(
+                base_url=settings.tts_base_url,
+                api_key=settings.tts_api_key,
+            )
+            logger.info(f"TTS client initialized for classic backend (target: {settings.tts_base_url}).")
+        except Exception as e:
+            logger.critical(f"Failed to initialize TTS client for classic backend: {e}. Exiting.")
+            return 1
+
+        # --- Model & Voice Availability (Classic Backend) ---
+        if settings.use_llm_proxy:
+            settings.available_models, settings.model_cost_data = get_models_and_costs_from_proxy(
+                settings.llm_api_base, settings.llm_api_key,
+            )
+        else:
+            settings.available_models, settings.model_cost_data = get_models_and_costs_from_litellm()
+
+        if not settings.available_models:
+            logger.warning("No LLM models found from proxy or litellm. Using fallback.")
+            settings.available_models = ["fallback/unknown-model"]
+
+        initial_llm_model_preference = settings.llm_model_arg
+        if initial_llm_model_preference and initial_llm_model_preference in settings.available_models:
+            settings.current_llm_model = initial_llm_model_preference
+        elif settings.available_models and settings.available_models[0] != "fallback/unknown-model":
+            if initial_llm_model_preference:
+                logger.warning(f"LLM model '{initial_llm_model_preference}' not found. Using first available: {settings.available_models[0]}.")
+            settings.current_llm_model = settings.available_models[0]
+        else:
+            settings.current_llm_model = initial_llm_model_preference or "fallback/unknown-model"
+            logger.warning(f"Using specified or fallback LLM model: {settings.current_llm_model}. Availability/cost data might be missing.")
+        logger.info(f"Initial LLM model (classic backend) set to: {settings.current_llm_model}")
+
+        if settings.is_openai_tts:
+            settings.available_voices_tts = OPENAI_TTS_VOICES
+        else:
+            settings.available_voices_tts = get_voices(settings.tts_base_url, settings.tts_api_key)
+            if not settings.available_voices_tts:
+                logger.warning(f"Could not retrieve voices from custom TTS server at {settings.tts_base_url}.")
+        logger.info(f"Available TTS voices (classic backend): {settings.available_voices_tts}")
+
+        initial_tts_voice_preference = settings.tts_voice_arg  # Classic TTS voice
+        if initial_tts_voice_preference and initial_tts_voice_preference in settings.available_voices_tts:
+            settings.current_tts_voice = initial_tts_voice_preference
+        elif settings.available_voices_tts:
+            if initial_tts_voice_preference:
+                 logger.warning(f"Classic TTS voice '{initial_tts_voice_preference}' not found. Using first available: {settings.available_voices_tts[0]}.")
+            settings.current_tts_voice = settings.available_voices_tts[0]
+        else:
+            settings.current_tts_voice = initial_tts_voice_preference
+            logger.error(f"No classic TTS voices available or specified voice '{settings.current_tts_voice}' is invalid. TTS may fail.")
+        logger.info(f"Initial classic TTS voice set to: {settings.current_tts_voice}")
+
+    # --- Common Post-Backend-Specific Setup ---
+    if settings.system_message:
+        logger.info(f"Loaded SYSTEM_MESSAGE: '{settings.system_message[:50]}...'")
+    else:
+        logger.info("No SYSTEM_MESSAGE defined.")
+
+    try:
+        app_name = "SimpleVoiceChat"
+        app_author = "Attila"
+        user_data_dir = Path(platformdirs.user_data_dir(app_name, app_author))
+        settings.chat_log_dir = user_data_dir / "chats"
+        settings.chat_log_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Chat log directory set to: {settings.chat_log_dir}")
+    except Exception as e:
+        logger.error(f"Failed to create chat log directory: {e}. Chat logging disabled.")
+        settings.chat_log_dir = None
+
+    # TTS audio directory setup (primarily for classic backend)
+    if settings.backend == "classic":
+        try:
+            app_name = "SimpleVoiceChat"
+            app_author = "Attila"
+            try:
+                cache_base_dir = Path(platformdirs.user_cache_dir(app_name, app_author))
+            except Exception:
+                logger.warning("Could not find user cache directory, falling back to user data directory for TTS audio.")
+                cache_base_dir = Path(platformdirs.user_data_dir(app_name, app_author))
+
+            settings.tts_base_dir = cache_base_dir / "tts_audio"
+            settings.tts_base_dir.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Base TTS audio directory: {settings.tts_base_dir}")
+
+            settings.tts_audio_dir = settings.tts_base_dir / settings.startup_timestamp_str
+            settings.tts_audio_dir.mkdir(exist_ok=True)
+            logger.info(f"This run's TTS audio directory (classic backend): {settings.tts_audio_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create temporary TTS audio directory for classic backend: {e}. TTS audio saving might fail.")
+    elif settings.backend in {"openai", "gemini"}:  # Add Gemini
+        logger.info(f"TTS audio file saving to disk is not applicable for '{settings.backend}' backend.")
+        settings.tts_audio_dir = None
+
+    logger.info(f"Application server host: {settings.host}")
+    logger.info(
+        f"Application server preferred port: {settings.preferred_port}",
+    )
+
+    # --- Stream Handler Setup ---
+    stream_handler: Any
+    if settings.backend == "openai":
+        logger.info("Initializing Stream with OpenAIRealtimeHandler.")
+        stream_handler = OpenAIRealtimeHandler(app_settings=settings)
+    elif settings.backend == "gemini":  # Add Gemini case
+        logger.info("Initializing Stream with GeminiRealtimeHandler.")
+        stream_handler = GeminiRealtimeHandler(app_settings=settings)
+    else:
+        logger.info("Initializing Stream with ReplyOnPause handler for classic backend.")
+        stream_handler = ReplyOnPause(
+            response,
+            algo_options=AlgoOptions(
+                audio_chunk_duration=3.0,
+                started_talking_threshold=0.2,
+                speech_threshold=0.2,
+            ),
+            model_options=SileroVadOptions(
+                threshold=0.6,
+                min_speech_duration_ms=800,
+                min_silence_duration_ms=3500,
+            ),
+            can_interrupt=True,
+        )
+
+    stream = Stream(
+        modality="audio",
+        mode="send-receive",
+        handler=stream_handler,
+        track_constraints={
+            "echoCancellation": True,
+            "noiseSuppression": {"exact": True},
+            "autoGainControl": {"exact": True},
+            # Ideal sample rate should match what the handler expects as input.
+            # OpenAI expects 24kHz. Gemini expects 16kHz. Classic is flexible.
+            "sampleRate": {"ideal": GEMINI_REALTIME_INPUT_SAMPLE_RATE if settings.backend == "gemini" else (OPENAI_REALTIME_SAMPLE_RATE if settings.backend == "openai" else 16000)},
+            "sampleSize": {"ideal": 16},
+            "channelCount": {"exact": 1},
+        },
+        rtc_configuration=get_twilio_turn_credentials() if get_space() else None,
+        concurrency_limit=5 if get_space() else None,
+        time_limit=180 if get_space() else None,
+    )
+
+    app = FastAPI()
+    stream.mount(app)
+    register_endpoints(app, stream)
+
+    current_host = settings.host
+    preferred_port_val = settings.preferred_port
+    actual_port = preferred_port_val
+    max_retries = 10
+
+    if is_port_in_use(actual_port, current_host):
+        logger.warning(
+            f"Preferred port {actual_port} on host {current_host} is in use. Searching for an available port...",
+        )
+        found_port = False
+        for attempt in range(max_retries):
+            new_port = random.randint(1024, 65535)
+            logger.debug(f"Attempt {attempt + 1}: Checking port {new_port} on {current_host}...")
+            if not is_port_in_use(new_port, current_host):
+                actual_port = new_port
+                found_port = True
+                logger.info(f"Found available port: {actual_port} on host {current_host}")
+                break
+        if not found_port:
+            logger.error(
+                f"Could not find an available port on host {current_host} after {max_retries} attempts. Exiting.",
+            )
+            return 1
+    else:
+        logger.info(f"Using preferred port {actual_port} on host {current_host}")
+
+    settings.port = actual_port
+    url = f"http://{current_host}:{actual_port}"
+
+    def run_server() -> None:
+        global uvicorn_server
+        try:
+            config = uvicorn.Config(
+                app,
+                host=current_host,
+                port=actual_port,
+                log_config=None,
+            )
+            uvicorn_server = uvicorn.Server(config)
+            logger.info(f"Starting Uvicorn server on {current_host}:{actual_port}...")
+            uvicorn_server.run()
+            logger.info("Uvicorn server has stopped.")
+        except Exception as e:
+            logger.critical(f"Uvicorn server encountered an error: {e}")
+        finally:
+            uvicorn_server = None
+
+    monitor_thread = threading.Thread(target=monitor_heartbeat_thread, daemon=True)
+    monitor_thread.start()
+
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+
+    logger.debug("Waiting for Uvicorn server to initialize...")
+    time.sleep(3.0)
+
+    if not server_thread.is_alive() or uvicorn_server is None:
+        logger.critical(
+            "Uvicorn server thread failed to start or initialize correctly. Exiting.",
+        )
+        return 1
+    logger.debug("Server thread appears to be running.")
+
+    exit_code = 0
+    try:
+        if settings.browser:
+            logger.info(f"Opening application in default web browser at: {url}")
+            webbrowser.open(url, new=1)
+            logger.info(
+                "Application opened in browser. Server is running in the background.",
+            )
+            logger.info("Press Ctrl+C to stop the server.")
+            try:
+                server_thread.join()
+            except KeyboardInterrupt:
+                logger.info("KeyboardInterrupt received, shutting down.")
+            finally:
+                logger.info("Signaling heartbeat monitor thread to stop...")
+                shutdown_event.set()
+                if (
+                    uvicorn_server
+                    and server_thread.is_alive()
+                    and not uvicorn_server.should_exit
+                ):
+                    logger.info("Signaling Uvicorn server to shut down...")
+                    uvicorn_server.should_exit = True
+                elif uvicorn_server and uvicorn_server.should_exit:
+                    logger.info("Uvicorn server already signaled to shut down.")
+                elif not server_thread.is_alive():
+                    logger.info("Server thread already stopped.")
+                else:
+                    logger.warning(
+                        "Uvicorn server instance not found, cannot signal shutdown.",
+                    )
+                if server_thread.is_alive():
+                    logger.info("Waiting for Uvicorn server thread to join...")
+                    server_thread.join(timeout=5.0)
+                    if server_thread.is_alive():
+                        logger.warning(
+                            "Uvicorn server thread did not exit gracefully after 5 seconds.",
+                        )
+                    else:
+                        logger.info("Uvicorn server thread joined successfully.")
+                logger.info("Waiting for heartbeat monitor thread to join...")
+                monitor_thread.join(timeout=2.0)
+                if monitor_thread.is_alive():
+                    logger.warning(
+                        "Heartbeat monitor thread did not exit gracefully after 2 seconds.",
+                    )
+                else:
+                    logger.info("Heartbeat monitor thread joined successfully.")
+        else:
+            logger.info(f"Creating pywebview window for URL: {url}")
+            api = Api(None)
+            webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
+            logger.info("pywebview setting OPEN_DEVTOOLS_IN_DEBUG set to False.")
+
+            pywebview_window = webview.create_window(
+                f"Simple Voice Chat v{APP_VERSION}",
+                url,
+                width=800,
+                height=800,
+                js_api=api,
+            )
+            api._window = pywebview_window
+
+            logger.info("Starting pywebview...")
+            try:
+                webview.start(debug=True, gui="qt")
+            except Exception as e:
+                logger.critical(f"Pywebview encountered an error: {e}")
+                exit_code = 1
+            finally:
+                logger.info("Pywebview window closed or heartbeat timed out.")
+                logger.info("Signaling heartbeat monitor thread to stop...")
+                shutdown_event.set()
+                if uvicorn_server and not uvicorn_server.should_exit:
+                    logger.info("Signaling Uvicorn server to shut down...")
+                    uvicorn_server.should_exit = True
+                elif uvicorn_server and uvicorn_server.should_exit:
+                    logger.info("Uvicorn server already signaled to shut down.")
+                else:
+                    logger.warning(
+                        "Uvicorn server instance not found, cannot signal shutdown.",
+                    )
+                logger.info("Waiting for Uvicorn server thread to join...")
+                server_thread.join(timeout=5.0)
+                if server_thread.is_alive():
+                    logger.warning(
+                        "Uvicorn server thread did not exit gracefully after 5 seconds.",
+                    )
+                else:
+                    logger.info("Uvicorn server thread joined successfully.")
+                logger.info("Waiting for heartbeat monitor thread to join...")
+                monitor_thread.join(timeout=2.0)
+                if monitor_thread.is_alive():
+                    logger.warning(
+                        "Heartbeat monitor thread did not exit gracefully after 2 seconds.",
+                    )
+                else:
+                    logger.info("Heartbeat monitor thread joined successfully.")
+    except Exception as e:
+        logger.critical(
+            f"An unexpected error occurred in the main execution block: {e}",
+            exc_info=True,
+        )
+        exit_code = 1
+        shutdown_event.set()
+        if uvicorn_server and not uvicorn_server.should_exit:
+            uvicorn_server.should_exit = True
+
+    logger.info(f"Main function returning exit code: {exit_code}")
+    return exit_code
+
