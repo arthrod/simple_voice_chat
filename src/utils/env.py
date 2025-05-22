@@ -75,6 +75,7 @@ APP_PORT_ENV: str = os.getenv("APP_PORT", "7860")  # Keep as string for argparse
 
 # --- System Message ---
 SYSTEM_MESSAGE_ENV: str | None = os.getenv("SYSTEM_MESSAGE")
+DEFAULT_SYSTEM_INSTRUCTION_ENV: str = os.getenv("DEFAULT_SYSTEM_INSTRUCTION", "") # Added
 
 # --- Heartbeat Configuration ---
 DISABLE_HEARTBEAT_ENV: str = os.getenv("DISABLE_HEARTBEAT", "False")
@@ -114,6 +115,7 @@ __all__ = [
     "STT_PORT_ENV",
     # Misc
     "SYSTEM_MESSAGE_ENV",
+    "DEFAULT_SYSTEM_INSTRUCTION_ENV", # Added
     # TTS Acronyms (Classic - Kokoro)
     "TTS_ACRONYM_PRESERVE_LIST_ENV",
     "TTS_API_KEY_ENV",

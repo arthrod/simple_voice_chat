@@ -91,14 +91,19 @@ class AppSettings(BaseModel):
     backend: str = "classic"
     disable_heartbeat: bool = False  # Populated from CLI/env
     openai_realtime_model_arg: str = OPENAI_REALTIME_MODEL_ENV
+    default_system_instruction: str = "" # Populated from CLI/env for Gemini
     # Add after openai_realtime_model_arg
 
     # --- Gemini Backend Config ---
     gemini_api_key: str | None = None  # Populated from args/env
     gemini_model_arg: str = GEMINI_MODEL_ENV  # Initial preference from args/env
-    gemini_voice_arg: str | None = GEMINI_VOICE_ENV  # Initial preference for Gemini voice
-    current_gemini_voice: str | None = None  # Actual current voice for Gemini backend
+    gemini_voice_arg: str | None = GEMINI_VOICE_ENV  # Initial preference for Gemini voice (CLI/env, not used directly if AppSettings.gemini_voice_name is primary)
+    current_gemini_voice: str | None = None  # Actual current voice for Gemini backend (set from AppSettings.gemini_voice_name)
     gemini_context_window_compression_threshold: int = 16000  # Populated from CLI/env, actual value used
+    # default_system_instruction is now in General App Config section for AppSettings
+    gemini_response_modalities: list[str] = ['AUDIO'] # Default in AppSettings
+    gemini_voice_name: str = "Aoede" # Default in AppSettings, used to set current_gemini_voice
+    gemini_language_code: str = "pt-BR" # Default in AppSettings, used to set current_stt_language if no CLI arg
 
     # --- LLM Config (Classic Backend) ---
     # Populated from args/env and derived in main()

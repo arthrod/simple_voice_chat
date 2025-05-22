@@ -1004,6 +1004,8 @@
         // --- WebRTC Setup State ---
         let webRtcSetupRetryTimeout = null;
         const WEBRTC_SETUP_RETRY_DELAY = 1000;
+        let webRtcSetupRetries = 0;
+        const MAX_WEBRTC_SETUP_RETRIES = 5;
 
         // --- UI Zoom State ---
         let currentZoomLevel = 1.0;
@@ -1617,11 +1619,21 @@
                 if (err instanceof DOMException) {
                     console.error(`DOMException: ${err.name} - ${err.message}`);
                     if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                        userMessage = 'No microphone found. Retrying in 1 second...';
+                    userMessage = `No microphone found. Retrying (${webRtcSetupRetries + 1}/${MAX_WEBRTC_SETUP_RETRIES})...`;
                         showToast(userMessage, "warning");
                         updateStatusIndicator('connecting', 'Mic not found, retrying...');
                         if (webRtcSetupRetryTimeout) clearTimeout(webRtcSetupRetryTimeout);
+
+                    if (webRtcSetupRetries < MAX_WEBRTC_SETUP_RETRIES) {
+                        webRtcSetupRetries++;
                         webRtcSetupRetryTimeout = setTimeout(setupWebRTC, WEBRTC_SETUP_RETRY_DELAY);
+                    } else {
+                        userMessage = 'Failed to find microphone after multiple retries. Please check device and permissions.';
+                        showToast(userMessage, "error");
+                        updateStatusIndicator('error', 'Mic Setup Failed');
+                        webRtcSetupRetries = 0; // Reset for future manual attempts if any
+                        stop(); // Stop further attempts
+                    }
                         return;
                     } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                         userMessage = 'Microphone access denied. Please grant permission in browser settings.';
