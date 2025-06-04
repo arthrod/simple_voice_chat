@@ -1,6 +1,6 @@
 import json
 import os # Ensure os is imported early
-import random
+import secrets
 
 # Set LITELLM_MODE to PRODUCTION before litellm is imported
 os.environ["LITELLM_MODE"] = "PRODUCTION"
@@ -1970,7 +1970,7 @@ def main(
         )
         found_port = False
         for attempt in range(max_retries):
-            new_port = random.randint(1024, 65535)
+            new_port = secrets.SystemRandom().randint(1024, 65535)
             logger.debug(f"Attempt {attempt + 1}: Checking port {new_port} on {current_host}...")
             if not is_port_in_use(new_port, current_host):
                 actual_port = new_port
